@@ -1,0 +1,27 @@
+[package]
+name = "sandbox"
+version = "0.1.0"
+authors = ["Andreas Franzén <andreas@devil.se>"]
+edition = "2018"
+default-run = "a2c"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "sandbox"
+
+[[bin]]
+name = "a2c"
+path = "bin/a2c.rs"
+
+[dependencies]
+geo = "0.14.2"
+geojson = { version = "0.19.0", features=["geo-types"] }
+line_intersection = { path = "../line_intersection"}
+rand = "*"
+rayon = "*"
+tch = "*"
+sdl2 = { version = "0.34.3" }
+csv = "*"
+serde = { version = "*", features=["derive"]}
+moving_avg = "*"
+clap = "3.0.0-beta.2"
+chrono = "*"
