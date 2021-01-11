@@ -6,6 +6,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::WindowCanvas;
 use sdl2::{pixels, rect, EventPump, Sdl};
+use crate::input::Input;
 
 pub struct Renderer {
     pub canvas: Option<WindowCanvas>,
@@ -62,24 +63,26 @@ impl Renderer {
         self.canvas = Some(canvas);
         self.initialized = true;
     }
-    pub fn quit(&mut self) -> bool {
+    pub fn get_input(&mut self) -> Input {
         for event in self.event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
+                    keycode: Some(Keycode::Q),
                     ..
-                } => return true,
+                } => return Input::Quit,
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
                     ..
-                } => {
-                    self.render = !self.render;
-                }
-                _ => {}
+                } => return Input::ToggleRender,
+                Event::KeyDown {
+                    keycode: Some(Keycode::E),
+                    ..
+                } => return Input::ToggleEvaluate,
+                _ => return Input::None
             }
         }
-        false
+        Input::None
     }
 
     pub fn clear(&mut self) {

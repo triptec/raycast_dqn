@@ -1,30 +1,35 @@
-use clap::Clap;
-mod renderer;
-mod ml;
-
-use crate::renderer::Renderer;
-use csv::Writer;
-use moving_avg::MovingAverage;
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng, thread_rng};
-use sandbox::env::Env;
-use sdl2::pixels::Color;
-use serde::Serialize;
-use std::time::Instant;
-use tch::{
-    kind::{DOUBLE_CPU, FLOAT_CPU, INT64_CPU},
-    nn,
-    nn::OptimizerConfig,
-    Device,
-    Kind::Float,
-    Tensor,
-};
+use std::{io, thread};
+use std::io::Read;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::mpsc;
-use std::{thread, io};
-use std::io::Read;
+use std::time::Instant;
+
+use clap::Clap;
+use csv::Writer;
+use moving_avg::MovingAverage;
+use rand::{Rng, SeedableRng, thread_rng};
+use rand::rngs::StdRng;
+use sdl2::pixels::Color;
+use serde::Serialize;
+use tch::{
+    Device,
+    kind::{DOUBLE_CPU, FLOAT_CPU, INT64_CPU},
+    Kind::Float,
+    nn,
+    nn::OptimizerConfig,
+    Tensor,
+};
+
+use input::Input;
 use ml::ReplayBuffer;
+use sandbox::env::Env;
+
 use crate::ml::Model_a2c;
+use crate::renderer::Renderer;
+
+mod renderer;
+mod ml;
+mod input;
 
 pub fn main() {
     let opts: Opts = Opts::parse();
@@ -62,7 +67,7 @@ pub fn main() {
     let num_obs = env.observation_space() as usize;
     let num_actions = env.action_space() as usize;
 
-    let mut model = Model_a2c::new(num_obs, num_actions, opts.GAMMA, opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
+    let mut model = Model_a2c::new(num_obs, num_actions, opts.GAMMA, opts.TAU,opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
 
     let mut replay_buffer =
         ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions);
@@ -82,7 +87,11 @@ pub fn main() {
     let mut output = true;
     let mut render = false;
     'running: for _ in 0..opts.MAX_EPISODES as i32 {
-        match get_input(&stdin_channel) {
+        let input = match renderer.get_input() {
+            Input::None => get_input(&stdin_channel),
+            i => i
+        };
+        match input {
             Input::None => {}
             Input::Quit => {
                 println!("Quit");
@@ -110,13 +119,13 @@ pub fn main() {
 
         loop {
             let actions_tensor = if evaluate {
-                tch::no_grad(|| model.forward(&obs))
+                tch::no_grad(|| model.actor.forward(&obs))
             } else {
                 if rng.gen_range(0.0, 1.0) < epsilon {
                     let actions: Vec<f64> = (0..num_actions).map(|_| {rng.gen_range(-1.0, 1.0)}).collect();
                     Tensor::of_slice(&actions).totype(Float)
                 } else {
-                    tch::no_grad(|| model.forward(&obs))
+                    tch::no_grad(|| model.actor.forward(&obs))
                 }
             };
             let action = i32::from(&actions_tensor.argmax(-1, false));
@@ -214,15 +223,6 @@ fn render_env(env: &mut Env, renderer: &mut Renderer) {
     renderer.render = false;
 }
 
-
-enum Input {
-    None,
-    Quit,
-    ToggleRender,
-    ToggleOutput,
-    ToggleEvaluate,
-}
-
 fn get_input(stdin_channel: &Receiver<String>) -> Input {
     match stdin_channel.try_recv() {
         Ok(key) => {
@@ -314,7 +314,7 @@ struct Opts {
     #[clap(long, default_value = "0.01")]
     MIN_EPSILON: f64,
     /// Random noise process parameter EPSILON_DECAY
-    #[clap(long, default_value = "0.999999")]
+    #[clap(long, default_value = "0.9999")]
     EPSILON_DECAY: f64,
     /// The leadning rate of the Actor
     #[clap(long, default_value = "0.0005")]

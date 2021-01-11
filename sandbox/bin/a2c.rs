@@ -1,11 +1,7 @@
-/* Deep Deterministic Policy Gradient.
-   Continuous control with deep reinforcement learning, Lillicrap et al. 2015
-   https://arxiv.org/abs/1509.02971
-   See https://spinningup.openai.com/en/latest/algorithms/ddpg.html for a
-   reference python implementation.
-*/
 use clap::Clap;
 mod renderer;
+mod ml;
+mod input;
 use crate::renderer::Renderer;
 use csv::Writer;
 use moving_avg::MovingAverage;
@@ -15,6 +11,8 @@ use sandbox::env::Env;
 use sdl2::pixels::Color;
 use serde::Serialize;
 use std::time::Instant;
+use input::Input;
+
 use tch::{
     kind::{DOUBLE_CPU, FLOAT_CPU, INT64_CPU},
     nn,
@@ -474,9 +472,10 @@ pub fn main() {
     let start = Instant::now();
 
     'running: for episode in 0..opts.MAX_EPISODES as i32 {
+        /*
         if renderer.quit() {
             break 'running;
-        }
+        }*/
         let mut obs = Tensor::zeros(&[num_obs as _], FLOAT_CPU);
         env.reset(0, 1.0f64);
         //dbg!(&obs);
