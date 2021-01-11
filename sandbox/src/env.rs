@@ -16,8 +16,6 @@ pub struct Env {
     pub possible_targets: Vec<Point<f64>>,
     pub scalex: f64,
     pub scaley: f64,
-    pub xmin: f64,
-    pub ymin: f64,
     pub agents: Vec<Agent>,
     pub original_targets: Vec<Point<f64>>,
     pub reward_wall_hit: f64,
@@ -46,8 +44,6 @@ impl Env {
             targets,
             scalex,
             scaley,
-            xmin,
-            ymin,
             agents: vec![],
             reward_wall_hit,
             reward_wall_proximity,
@@ -77,41 +73,9 @@ impl Env {
         /*
         relative_bearing_to_target,
         steps_to_target,
-        past_position_bearing,
-        ray
+        rays
         */
-        3 + self.agents.get(0).unwrap().ray_count as usize
-    }
-
-    pub fn get_line_strings_as_lines(&self) -> Vec<HashMap<&str, f64>> {
-        let mut res = vec![];
-        self.line_strings.iter().for_each(|l| {
-            for line in l.lines() {
-                let hashmap: HashMap<&str, f64> = [
-                    ("start_x", line.start.x),
-                    ("start_y", line.start.y),
-                    ("end_x", line.end.x),
-                    ("end_y", line.end.y),
-                ]
-                .iter()
-                .cloned()
-                .collect();
-                res.push(hashmap);
-            }
-        });
-        res
-    }
-
-    pub fn get_targets_as_points(&self) -> Vec<HashMap<&str, f64>> {
-        let mut res = vec![];
-        for target in self.targets.iter() {
-            let hashmap: HashMap<&str, f64> = [("x", target.x()), ("y", target.y())]
-                .iter()
-                .cloned()
-                .collect();
-            res.push(hashmap);
-        }
-        res
+        2 + self.agents.get(0).unwrap().ray_count as usize
     }
 
     pub fn step(&mut self, action: i32, a: i32) -> (Vec<f64>, f64, bool) {
@@ -135,17 +99,7 @@ impl Env {
             self.agents[a as usize].active = false;
             return (state, reward, true);
         }
-        let proximity_ray = Ray::new(
-            direction_change,
-            self.agents[a as usize].speed * self.wall_proximity,
-            self.agents[a as usize].direction,
-            self.agents[a as usize].position,
-            false,
-            0.0,
-        );
-        if utils::intersects(&proximity_ray, &self.line_strings.iter().collect()) {
-            reward = self.reward_wall_proximity;
-        }
+
         self.agents[a as usize].age += 1.0;
         self.agents[a as usize].food -= 1.0;
         self.agents[a as usize].step(action as usize);
@@ -195,7 +149,6 @@ impl Env {
             .euclidean_distance(&closest_target);
         let steps_to_target = (distance_to_target / self.agents[a as usize].speed) / 1000.0;
         state.push(steps_to_target);
-        state.push(self.agents[a as usize].past_position_bearing / 3.14159);
         let mut ray_lengths = self.agents[a as usize]
             .rays
             .iter()

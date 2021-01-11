@@ -3,7 +3,7 @@ name = "sandbox"
 version = "0.1.0"
 authors = ["Andreas Franzén <andreas@devil.se>"]
 edition = "2018"
-default-run = "a2c"
+default-run = "bin2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "sandbox"
@@ -11,6 +11,14 @@ name = "sandbox"
 [[bin]]
 name = "a2c"
 path = "bin/a2c.rs"
+
+[[bin]]
+name = "bin"
+path = "bin/bin.rs"
+
+[[bin]]
+name = "bin2"
+path = "bin/bin2.rs"
 
 [dependencies]
 geo = "0.14.2"

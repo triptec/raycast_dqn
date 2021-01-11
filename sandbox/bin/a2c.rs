@@ -178,10 +178,11 @@ impl Actor {
                     .add_fn(|xs| xs.relu());
             }
 
+            /*
             network = network
                 .add(nn::linear(p / format!("l{}", index), layers.get(index).unwrap().clone(), layers.get(index).unwrap().clone(), Default::default()))
                 .add_fn(|xs| xs.relu());
-
+            */
 
             if index == layers.len() - 1 {
                 network = network
@@ -422,7 +423,6 @@ pub fn main() {
         opts.AGENT_VISIBILITY,
         opts.AGENT_MAX_AGE,
         opts.AGENT_FOOD,
-        opts.AGENT_POSITION_TICKER,
     );
     let mut env = Env::new(
         opts.ENV_FILE,
@@ -468,7 +468,7 @@ pub fn main() {
     let mut last_step = 0;
     let mut total_targets: i32 = 0;
     let mut total_rewards: f64 = 0.0;
-    let mut target_avg_20 = MovingAverage::new(20);
+    let mut target_step_avg_100 = MovingAverage::new(100);
     let mut target_avg_100 = MovingAverage::new(100);
     let mut max_target_avg_100: f64 = 0.0;
     let start = Instant::now();
@@ -536,7 +536,7 @@ pub fn main() {
         };
 
         //println!("episode {}(steps {}, targets {}), total step {}, total targets {}, target/step {}, reward {}, epsilon {}", episode, total_step - last_step, env.agents.get(0).unwrap().collected_targets.len() - 1, total_step, found_targets, found_targets/total_step as f64, total_reward, agent.my_noise.epsilon);
-        let tmp_target_avg_20 = target_avg_20.feed(episode_targets as f64);
+        let tmp_target_step_avg_100 = target_step_avg_100.feed(episode_targets as f64/episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
 
         max_target_avg_100 = max_target_avg_100.max(tmp_target_avg_100);
@@ -552,7 +552,7 @@ pub fn main() {
             targets_per_step,
             targets_per_episode,
             rewards_per_step: total_rewards / total_steps as f64,
-            target_avg_20: tmp_target_avg_20,
+            target_step_avg_100: tmp_target_step_avg_100,
             target_avg_100: tmp_target_avg_100,
             max_target_avg_100: max_target_avg_100,
             epsilon: agent.my_noise.epsilon,
@@ -690,7 +690,7 @@ struct StatsRow {
     targets_per_step: f64,
     targets_per_episode: f64,
     rewards_per_step: f64,
-    target_avg_20: f64,
+    target_step_avg_100: f64,
     target_avg_100: f64,
     max_target_avg_100: f64,
     actor_loss: f64,

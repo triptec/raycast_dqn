@@ -15,6 +15,7 @@ pub struct Renderer {
     pub display_height: f64,
     pub resize: f64,
     pub render: bool,
+    pub initialized: bool,
 }
 
 impl Renderer {
@@ -29,9 +30,13 @@ impl Renderer {
             display_height: 1000.0,
             resize: 0.2,
             render: false,
+            initialized: false,
         }
     }
     pub fn init(&mut self) {
+        if self.initialized {
+            return;
+        }
         let video_subsystem = self.sdl_context.video().unwrap();
 
         let window = video_subsystem
@@ -55,6 +60,7 @@ impl Renderer {
         canvas.clear();
         canvas.present();
         self.canvas = Some(canvas);
+        self.initialized = true;
     }
     pub fn quit(&mut self) -> bool {
         for event in self.event_pump.poll_iter() {
