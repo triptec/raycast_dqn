@@ -7,15 +7,15 @@ def work(config):
 
 configs = [
     {
-        "name": "l64-g999",
-        "layer": "64",
+        "name": "l64-64-64-g999",
+        "layer": "64 64 64",
         "gamma": "0.999",
      },
-    {
-        "name": "l64-64-g999",
-        "layer": "64 64",
-        "gamma": "0.999",
-    },
+#    {
+#        "name": "l64-64-g999",
+#        "layer": "64 64",
+#        "gamma": "0.999",
+#    },
 #    {
 #        "name": "l256-g999",
 #        "layer": "256",
