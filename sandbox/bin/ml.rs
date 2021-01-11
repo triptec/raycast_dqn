@@ -126,7 +126,25 @@ impl Model_a2c {
         let q = self.forward(&states);
 
         let diff = q_target.copy() - q.copy();
-        dbg!(&q_target.get(0), &q.get(0), &diff.get(0));
+        let actions_taken = actions.argmax(-1, false);
+        let mut q1 = vec![];
+        for i in 0..batch_size {
+            let action_preditions = q.get(i as i64);
+            //let predicted_value = action_preditions.get(actions_taken.get(i as i64) as i64);
+            let mut tmp = vec![];
+            for j in 0..5 {
+                if j == i64::from(actions_taken.get(i as i64).get(0)){
+                    tmp.push(f64::from(q_target.get(i as i64).get(j as i64)));
+                } else {
+                    tmp.push(f64::from(q.get(i as i64).get(j as i64)));
+                }
+            }
+            dbg!(tmp);
+            q1.push(Tensor::of_slice(&tmp).totype(Float));
+        }
+        let q2 = Tensor::of_slice(&q1).totype(Float);
+        //dbg!(&q_target.get(0), &q.get(0), &diff.get(0), &x.get(0));
+        /*
         let x = diff.argmax(-2, false);
         for i in 0..5 {
             let t = &x.get(i);
@@ -134,12 +152,13 @@ impl Model_a2c {
             for _ in 0..4 {
                 replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy());
             }
-        }
+        }*/
 
+        let value_loss = q.smooth_l1_loss(&q2, Reduction::Mean, 1.0);
         //let value_loss = q.smooth_l1_loss(&q_target, Reduction::Mean, 1.0);
         //dbg!(&q_target.get(index), &q.get(index), &rewards.get(index), &value_loss);
 
-        let value_loss = (&diff * &diff).mean(Float);
+        //let value_loss = (&diff * &diff).mean(Float);
         self.optimizer.zero_grad();
         value_loss.backward();
         self.optimizer.step();
