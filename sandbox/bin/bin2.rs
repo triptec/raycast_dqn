@@ -324,7 +324,7 @@ struct Opts {
     #[clap(long, default_value = "1000000")]
     REPLAY_BUFFER_CAPACITY: usize,
     /// The training batch size for each training iteration.
-    #[clap(long, default_value = "64")]
+    #[clap(long, default_value = "256")]
     TRAINING_BATCH_SIZE: usize,
     /// The total number of episodes.
     #[clap(long, default_value = "20000")]

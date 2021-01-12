@@ -347,12 +347,14 @@ impl Model for Model_a2c {
         let max_diff_index = diff.abs().argmax(0, true);
         let index = i64::from(max_diff_index);
         */
-
+        /*
         let max_diff_indexes = diff.abs().argsort(0, true);
         for i in 0..(batch_size as f64 / 10.0).round() as i64 {
             let index = i64::from(max_diff_indexes.get(i as i64));
             replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
         }
+
+         */
 
         /*
         //dbg!(&states.get(index), &actions.get(index), &rewards.get(index), &next_states.get(index));
@@ -393,12 +395,15 @@ impl Model for Model_ddqn {
             Some(v) => v,
             _ => return, // We don't have enough samples for training yet.
         };
-
+        let future_predicted_reward = self.actor_target.forward(&next_states);
         let mut q_target =
-            rewards.copy() + (self.gamma * self.actor_target.forward(&next_states)).detach();
+            rewards.copy() + (self.gamma * &future_predicted_reward).detach();
         let q = self.actor.forward(&states);
 
+        let actions_taken = actions.argmax(-1, false);
+        dbg!(&actions.get(0), &rewards.get(0), &q.get(0), &q_target.get(0), &future_predicted_reward.get(0));
         /* Remember worst predictions */
+        /*
         let actions_taken = actions.argmax(1, false).unsqueeze(-1);
         let predicted_action_rewards = q.gather(-1, &actions_taken, false);
         let action_rewards = q_target.gather(-1, &actions_taken, false);
@@ -409,6 +414,8 @@ impl Model for Model_ddqn {
             let index = i64::from(max_diff_indexes.get(i as i64));
             replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
         }
+
+         */
         //let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
         //&action_diff.print();
 
