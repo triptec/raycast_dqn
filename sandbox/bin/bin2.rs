@@ -24,7 +24,7 @@ use input::Input;
 use ml::ReplayBuffer;
 use sandbox::env::Env;
 
-use crate::ml::Model_a2c;
+use crate::ml::Model_ddqn;
 use crate::renderer::Renderer;
 
 mod renderer;
@@ -67,7 +67,7 @@ pub fn main() {
     let num_obs = env.observation_space() as usize;
     let num_actions = env.action_space() as usize;
 
-    let mut model = Model_a2c::new(num_obs, num_actions, opts.GAMMA, opts.TAU,opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
+    let mut model = Model_ddqn::new(num_obs, num_actions, opts.GAMMA, opts.TAU, opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
 
     let mut replay_buffer =
         ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions);
@@ -263,7 +263,7 @@ fn spawn_stdin_channel() -> Receiver<String> {
 #[clap(version = "1.0")]
 struct Opts {
     /// Actor layers
-    #[clap(long, default_value = "512")]
+    #[clap(long, default_value = "512", )]
     ACTOR_LAYERS: Vec<i64>,
     /// Critic layers
     #[clap(long, default_value = "512")]
@@ -281,13 +281,13 @@ struct Opts {
     #[clap(long, default_value = "0.997")]
     GAMMA: f64,
     /// The weight for updating the target networks.
-    #[clap(long, default_value = "0.005")]
+    #[clap(long, default_value = "0.0005")]
     TAU: f64,
     /// The capacity of the replay buffer used for sampling training data.
     #[clap(long, default_value = "1000000")]
     REPLAY_BUFFER_CAPACITY: usize,
     /// The training batch size for each training iteration.
-    #[clap(long, default_value = "256")]
+    #[clap(long, default_value = "64")]
     TRAINING_BATCH_SIZE: usize,
     /// The total number of episodes.
     #[clap(long, default_value = "20000")]
@@ -314,7 +314,7 @@ struct Opts {
     #[clap(long, default_value = "0.01")]
     MIN_EPSILON: f64,
     /// Random noise process parameter EPSILON_DECAY
-    #[clap(long, default_value = "0.9999")]
+    #[clap(long, default_value = "0.9995")]
     EPSILON_DECAY: f64,
     /// The leadning rate of the Actor
     #[clap(long, default_value = "0.0005")]
@@ -341,7 +341,7 @@ struct Opts {
     #[clap(long, default_value = "1000")]
     AGENT_FOOD: i32,
     /// Agent max age
-    #[clap(long, default_value = "10000")]
+    #[clap(long, default_value = "1000")]
     AGENT_MAX_AGE: i32,
     /// Agent position ticker
     #[clap(long, default_value = "70")]

@@ -373,10 +373,12 @@ impl Agent {
         let q = self.critic.forward(&states, &actions);
 
         let diff = q_target.copy() - q.copy();
+        /*
         let x = diff.argmax(-2, true);
         let index = i64::from(x);
         //dbg!(&states.get(index), &actions.get(index), &rewards.get(index), &next_states.get(index));
         self.remember(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy());
+         */
         let critic_loss = (&diff * &diff).mean(Float);
         self.critic_loss = f64::from(&critic_loss);
         self.critic.opt.zero_grad();

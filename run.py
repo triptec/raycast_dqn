@@ -3,7 +3,7 @@ import multiprocessing
 
 def work(config):
     print(config)
-    return os.system(f'cargo run --release -- --stats-file {config["name"]}.csv --actor-layers {config["layer"]} --max-episodes 10000 --agent-max-age --render false > /dev/null 2>&1')
+    return os.system(f'cargo run --release -- --stats-file {config["name"]}g999.csv --actor-layers {config["layer"]} --gamma 0.999 --max-episodes 10000 --agent-max-age --render false > /dev/null 2>&1')
 
 configs = [
     {
@@ -48,5 +48,5 @@ configs = [
     },
 ]
 
-with multiprocessing.Pool(2) as pool:
-    pool.map(work, configs)
+with multiprocessing.Pool(4) as pool:
+    pool.map(work, reversed(configs))

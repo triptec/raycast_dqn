@@ -126,7 +126,7 @@ impl Actor {
     }
 }
 
-pub struct Model_a2c {
+pub struct Model_ddqn {
     pub actor: Actor,
     actor_target: Actor,
     gamma: f64,
@@ -137,7 +137,7 @@ pub struct Model_a2c {
     layers: Vec<i64>,
 }
 
-impl Model_a2c {
+impl Model_ddqn {
     pub fn new(
         num_obs: usize, num_actions: usize,
         gamma: f64,
@@ -179,6 +179,7 @@ impl Model_a2c {
             //dbg!(&q.get(i as i64), &q1.get(i as i64));
         }
 
+        /*
         let x = diff.argmax(-2, false);
         for i in 0..5 {
             let t = &x.get(i);
@@ -187,12 +188,13 @@ impl Model_a2c {
                 replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy());
             }
         }
+         */
 
-        let value_loss = q.smooth_l1_loss(&q1, Reduction::Mean, 1.0);// * self.tau;
+        //let value_loss = q.smooth_l1_loss(&q1, Reduction::Mean, 1.0);
         //let value_loss = q.smooth_l1_loss(&q_target, Reduction::Mean, 1.0);
         //dbg!(&q_target.get(index), &q.get(index), &rewards.get(index), &value_loss);
 
-        //let value_loss = (&diff * &diff).mean(Float);
+        let value_loss = (&diff * &diff).mean(Float);
         self.actor.optimizer.zero_grad();
         value_loss.backward();
         self.actor.optimizer.step();
