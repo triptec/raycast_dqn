@@ -73,9 +73,10 @@ impl Env {
         /*
         relative_bearing_to_target,
         steps_to_target,
+        past_position_bearing,
         rays
         */
-        2 + self.agents.get(0).unwrap().ray_count as usize
+        3 + self.agents.get(0).unwrap().ray_count as usize
     }
 
     pub fn step(&mut self, action: i32, a: i32) -> (Vec<f64>, f64, bool) {
@@ -100,6 +101,18 @@ impl Env {
             return (state, reward, true);
         }
 
+        let proximity_ray = Ray::new(
+            direction_change,
+            self.agents[a as usize].speed * self.wall_proximity,
+            self.agents[a as usize].direction,
+            self.agents[a as usize].position,
+            false,
+            0.0,
+        );
+        if utils::intersects(&proximity_ray, &self.line_strings.iter().collect()) {
+            reward = self.reward_wall_proximity;
+        }
+
         self.agents[a as usize].age += 1.0;
         self.agents[a as usize].food -= 1.0;
         self.agents[a as usize].step(action as usize);
@@ -108,9 +121,9 @@ impl Env {
         // Target
         reward = reward - state[0].abs() * self.reward_target_bearing_mult;
         reward = reward - state[1] * self.reward_target_steps_mult; // steps_to_target / 3
-                                          // Past position
-                                          //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
-                                          //reward = reward - (1.0-state[3]) / 20.0; //
+                                                                    // Past position
+                                                                    //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
+                                                                    //reward = reward - (1.0-state[3]) / 20.0; //
         if state[1] * 1000.0 < 10.0 {
             state = self.agents[a as usize].last_state.iter().copied().collect();
             reward = self.reward_target_found;
@@ -149,6 +162,7 @@ impl Env {
             .euclidean_distance(&closest_target);
         let steps_to_target = (distance_to_target / self.agents[a as usize].speed) / 1000.0;
         state.push(steps_to_target);
+        state.push(self.agents[a as usize].past_position_bearing / 3.14159);
         let mut ray_lengths = self.agents[a as usize]
             .rays
             .iter()

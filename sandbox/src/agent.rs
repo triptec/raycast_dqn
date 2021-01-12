@@ -26,6 +26,11 @@ pub struct Agent {
     pub last_state: Vec<f64>,
     pub env_line_strings: Vec<LineString<f64>>,
     pub targets_found: i32,
+    pub position_ticker: i32,
+    pub position_ticker_start: i32,
+    pub past_positions: Vec<Point<f64>>,
+    pub past_position_distance: f64,
+    pub past_position_bearing: f64,
 }
 
 impl Agent {
@@ -36,6 +41,7 @@ impl Agent {
         visibility: f64,
         max_age: i32,
         food: i32,
+        position_ticker: i32,
     ) -> Self {
         Agent {
             speed, // 0.0045
@@ -57,6 +63,11 @@ impl Agent {
             targets_found: 0,
             closest_target: Point::new(0.0, 0.0),
             active: true,
+            position_ticker,
+            position_ticker_start: position_ticker,
+            past_positions: vec![],
+            past_position_distance: 0.0,
+            past_position_bearing: 0.0,
             last_state: vec![],
             action_space: vec![
                 -10.0f64.to_radians(),
@@ -67,7 +78,7 @@ impl Agent {
             ],
             prev_state: vec![],
             env_line_strings: vec![],
-            }
+        }
     }
 
     pub(crate) fn add_env_info(
@@ -78,6 +89,7 @@ impl Agent {
         self.env_line_strings = env_line_strings;
         self.collected_targets = vec![position.clone()];
         self.position = position;
+        self.past_positions = vec![position];
     }
 
     pub(crate) fn reset(&mut self, mut position: Point<f64>) {
@@ -94,6 +106,10 @@ impl Agent {
         self.active = true;
         self.age = 1.0;
         self.food = self.food_start;
+        self.position_ticker = self.position_ticker_start;
+        self.past_positions = vec![position];
+        self.past_position_distance = 0.0;
+        self.past_position_bearing = 0.0;
         self.last_state = vec![];
         self.prev_state = vec![];
     }
@@ -118,11 +134,24 @@ impl Agent {
         if self.collected_targets.len() as i32 == n_targets {
             self.collected_targets = vec![];
         }
+        self.past_positions = vec![self.position];
+        self.position_ticker = 0;
     }
 
     pub fn step(&mut self, action: usize) {
         let step_size = self.speed;
         let direction_change = self.action_space.get(action as usize).unwrap();
+        self.position_ticker = self.position_ticker - 1;
+        if self.position_ticker <= 0 {
+            self.position_ticker = self.position_ticker_start;
+            self.past_positions.push(self.position);
+        }
+        if self.past_positions.len() > 3 {
+            self.past_positions = self
+                .past_positions
+                .drain(self.past_positions.len() - 3..)
+                .collect();
+        }
         if self.food <= 0.0 {
             self.active = false;
         }
@@ -136,10 +165,15 @@ impl Agent {
         if self.direction < -3.14159 {
             self.direction = self.direction + 3.14159 * 2.0;
         }
+        let closest_past_position =
+            utils::closest_of(self.past_positions.iter(), self.position).unwrap();
         let new_position = Point::new(
             self.position.x() + step_size * self.direction.cos(),
             self.position.y() + step_size * self.direction.sin(),
         );
+        self.past_position_distance = self.position.euclidean_distance(&closest_past_position);
+        self.past_position_bearing =
+            utils::relative_bearing_to_target(self.position, new_position, closest_past_position);
         self.position = new_position;
         self.cast_rays();
         self.update();

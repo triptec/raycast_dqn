@@ -31,5 +31,5 @@ sdl2 = { version = "0.34.3" }
 csv = "*"
 serde = { version = "*", features=["derive"]}
 moving_avg = "*"
-clap = "3.0.0-beta.2"
+clap = { version = "3.0.0-beta.2", features=["derive"]}
 chrono = "*"

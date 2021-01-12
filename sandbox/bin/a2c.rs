@@ -1,9 +1,10 @@
 use clap::Clap;
-mod renderer;
-mod ml;
 mod input;
+mod ml;
+mod renderer;
 use crate::renderer::Renderer;
 use csv::Writer;
+use input::Input;
 use moving_avg::MovingAverage;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -11,7 +12,6 @@ use sandbox::env::Env;
 use sdl2::pixels::Color;
 use serde::Serialize;
 use std::time::Instant;
-use input::Input;
 
 use tch::{
     kind::{DOUBLE_CPU, FLOAT_CPU, INT64_CPU},
@@ -155,7 +155,12 @@ struct Actor {
 
 impl Clone for Actor {
     fn clone(&self) -> Self {
-        let mut new = Self::new(self.num_obs, self.num_actions, self.learning_rate, self.layers.clone());
+        let mut new = Self::new(
+            self.num_obs,
+            self.num_actions,
+            self.learning_rate,
+            self.layers.clone(),
+        );
         new.var_store.copy(&self.var_store).unwrap();
         new
     }
@@ -172,7 +177,12 @@ impl Actor {
         for index in 0..layers.len() {
             if index == 0 {
                 network = network
-                    .add(nn::linear(p / "first", num_obs as _, layers.get(index).unwrap().clone(), Default::default()))
+                    .add(nn::linear(
+                        p / "first",
+                        num_obs as _,
+                        layers.get(index).unwrap().clone(),
+                        Default::default(),
+                    ))
                     .add_fn(|xs| xs.relu());
             }
 
@@ -219,12 +229,17 @@ struct Critic {
     num_actions: usize,
     opt: nn::Optimizer<nn::Adam>,
     learning_rate: f64,
-    layers: Vec<i64>
+    layers: Vec<i64>,
 }
 
 impl Clone for Critic {
     fn clone(&self) -> Self {
-        let mut new = Self::new(self.num_obs, self.num_actions, self.learning_rate, self.layers.clone());
+        let mut new = Self::new(
+            self.num_obs,
+            self.num_actions,
+            self.learning_rate,
+            self.layers.clone(),
+        );
         new.var_store.copy(&self.var_store).unwrap();
         new
     }
@@ -239,23 +254,31 @@ impl Critic {
         for index in 0..layers.len() {
             if index == 0 {
                 network = network
-                    .add(nn::linear(p / "clfirst", (num_obs + num_actions) as _, layers.get(index).unwrap().clone(), Default::default()))
+                    .add(nn::linear(
+                        p / "clfirst",
+                        (num_obs + num_actions) as _,
+                        layers.get(index).unwrap().clone(),
+                        Default::default(),
+                    ))
                     .add_fn(|xs| xs.relu());
             }
 
             network = network
-                .add(nn::linear(p / format!("cl{}", index), layers.get(index).unwrap().clone(), layers.get(index).unwrap().clone(), Default::default()))
+                .add(nn::linear(
+                    p / format!("cl{}", index),
+                    layers.get(index).unwrap().clone(),
+                    layers.get(index).unwrap().clone(),
+                    Default::default(),
+                ))
                 .add_fn(|xs| xs.relu());
 
-
             if index == layers.len() - 1 {
-                network = network
-                    .add(nn::linear(
-                        p / "cllast",
-                        layers.get(index).unwrap().clone(),
-                        1,
-                        Default::default(),
-                    ))
+                network = network.add(nn::linear(
+                    p / "cllast",
+                    layers.get(index).unwrap().clone(),
+                    1,
+                    Default::default(),
+                ))
             }
         }
 
@@ -412,7 +435,7 @@ pub fn main() {
     let mut rng: StdRng = SeedableRng::seed_from_u64(opts.RANDOM_SEED);
     let stats_file = match opts.STATS_FILE {
         Some(p) => p,
-        None => format!("{}.csv", chrono::Utc::now().to_rfc3339())
+        None => format!("{}.csv", chrono::Utc::now().to_rfc3339()),
     };
     let mut wtr = Writer::from_path(stats_file).unwrap();
 
@@ -423,6 +446,7 @@ pub fn main() {
         opts.AGENT_VISIBILITY,
         opts.AGENT_MAX_AGE,
         opts.AGENT_FOOD,
+        opts.AGENT_POSITION_TICKER,
     );
     let mut env = Env::new(
         opts.ENV_FILE,
@@ -445,8 +469,18 @@ pub fn main() {
     let num_actions = env.action_space() as usize;
     //let num_actions = 1 as usize;
 
-    let actor = Actor::new(num_obs, num_actions, opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
-    let critic = Critic::new(num_obs, num_actions, opts.CRITIC_LEARNING_RATE, opts.CRITIC_LAYERS);
+    let actor = Actor::new(
+        num_obs,
+        num_actions,
+        opts.ACTOR_LEARNING_RATE,
+        opts.ACTOR_LAYERS,
+    );
+    let critic = Critic::new(
+        num_obs,
+        num_actions,
+        opts.CRITIC_LEARNING_RATE,
+        opts.CRITIC_LAYERS,
+    );
     let ou_noise = OuNoise::new(opts.MU, opts.THETA, opts.SIGMA, num_actions);
     let my_noise = MyNoise::new(
         opts.EPSILON,
@@ -537,7 +571,8 @@ pub fn main() {
         };
 
         //println!("episode {}(steps {}, targets {}), total step {}, total targets {}, target/step {}, reward {}, epsilon {}", episode, total_step - last_step, env.agents.get(0).unwrap().collected_targets.len() - 1, total_step, found_targets, found_targets/total_step as f64, total_reward, agent.my_noise.epsilon);
-        let tmp_target_step_avg_100 = target_step_avg_100.feed(episode_targets as f64/episode_steps as f64);
+        let tmp_target_step_avg_100 =
+            target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
 
         max_target_avg_100 = max_target_avg_100.max(tmp_target_avg_100);

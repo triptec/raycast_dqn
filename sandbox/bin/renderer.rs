@@ -1,3 +1,4 @@
+use crate::input::Input;
 use core::option::Option::Some;
 use geo::{Line, LineString, Point};
 use sandbox::ray::Ray;
@@ -6,7 +7,6 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::WindowCanvas;
 use sdl2::{pixels, rect, EventPump, Sdl};
-use crate::input::Input;
 
 pub struct Renderer {
     pub canvas: Option<WindowCanvas>,
@@ -79,7 +79,7 @@ impl Renderer {
                     keycode: Some(Keycode::E),
                     ..
                 } => return Input::ToggleEvaluate,
-                _ => return Input::None
+                _ => return Input::None,
             }
         }
         Input::None

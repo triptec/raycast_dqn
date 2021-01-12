@@ -1,22 +1,26 @@
-use std::{io, thread};
+#[macro_use]
+extern crate clap;
+use clap::ArgEnum;
+
 use std::io::Read;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
+use std::{io, thread};
 
 use clap::Clap;
 use csv::Writer;
 use moving_avg::MovingAverage;
-use rand::{Rng, SeedableRng, thread_rng};
 use rand::rngs::StdRng;
+use rand::{thread_rng, Rng, SeedableRng};
 use sdl2::pixels::Color;
 use serde::Serialize;
 use tch::{
-    Device,
     kind::{DOUBLE_CPU, FLOAT_CPU, INT64_CPU},
-    Kind::Float,
     nn,
     nn::OptimizerConfig,
+    Device,
+    Kind::Float,
     Tensor,
 };
 
@@ -24,12 +28,12 @@ use input::Input;
 use ml::ReplayBuffer;
 use sandbox::env::Env;
 
-use crate::ml::Model_ddqn;
+use crate::ml::{Model, Model_a2c, Model_ddqn};
 use crate::renderer::Renderer;
 
-mod renderer;
-mod ml;
 mod input;
+mod ml;
+mod renderer;
 
 pub fn main() {
     let opts: Opts = Opts::parse();
@@ -37,10 +41,9 @@ pub fn main() {
     let stdin_channel = spawn_stdin_channel();
     let stats_file = match opts.STATS_FILE {
         Some(p) => p,
-        None => format!("{}.csv", chrono::Utc::now().to_rfc3339())
+        None => format!("{}.csv", chrono::Utc::now().to_rfc3339()),
     };
     let mut wtr = Writer::from_path(stats_file).unwrap();
-
 
     let mut env_agent = sandbox::agent::Agent::new(
         opts.AGENT_SPEED,
@@ -49,6 +52,7 @@ pub fn main() {
         opts.AGENT_VISIBILITY,
         opts.AGENT_MAX_AGE,
         opts.AGENT_FOOD,
+        opts.AGENT_POSITION_TICKER,
     );
     let mut env = Env::new(
         opts.ENV_FILE,
@@ -67,10 +71,27 @@ pub fn main() {
     let num_obs = env.observation_space() as usize;
     let num_actions = env.action_space() as usize;
 
-    let mut model = Model_ddqn::new(num_obs, num_actions, opts.GAMMA, opts.TAU, opts.ACTOR_LEARNING_RATE, opts.ACTOR_LAYERS);
+    let mut model: Box<dyn Model> = match opts.MODEL_TYPE {
+        ModelType::A2C => Box::new(Model_a2c::new(
+            num_obs,
+            num_actions,
+            opts.GAMMA,
+            opts.TAU,
+            opts.ACTOR_LEARNING_RATE,
+            opts.CRITIC_LEARNING_RATE,
+            opts.ACTOR_LAYERS,
+        )),
+        ModelType::DDQN => Box::new(Model_ddqn::new(
+            num_obs,
+            num_actions,
+            opts.GAMMA,
+            opts.TAU,
+            opts.ACTOR_LEARNING_RATE,
+            opts.ACTOR_LAYERS,
+        )),
+    };
 
-    let mut replay_buffer =
-        ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions);
+    let mut replay_buffer = ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions);
 
     let mut epsilon = opts.EPSILON;
     let mut epsilon_min = opts.MIN_EPSILON;
@@ -89,7 +110,7 @@ pub fn main() {
     'running: for _ in 0..opts.MAX_EPISODES as i32 {
         let input = match renderer.get_input() {
             Input::None => get_input(&stdin_channel),
-            i => i
+            i => i,
         };
         match input {
             Input::None => {}
@@ -119,13 +140,31 @@ pub fn main() {
 
         loop {
             let actions_tensor = if evaluate {
-                tch::no_grad(|| model.actor.forward(&obs))
+                tch::no_grad(|| model.forward(&obs))
             } else {
                 if rng.gen_range(0.0, 1.0) < epsilon {
-                    let actions: Vec<f64> = (0..num_actions).map(|_| {rng.gen_range(-1.0, 1.0)}).collect();
-                    Tensor::of_slice(&actions).totype(Float)
+                    //let actions: Vec<f64> = (0..num_actions).map(|_| {rng.gen_range(-1.0, 1.0)}).collect();
+                    //Tensor::of_slice(&actions).totype(Float)
+
+                    /*
+                    let action = rng.gen_range(0, 5);
+                    let mut zero_vec = vec![0.0; num_actions];
+                    zero_vec[action] = 2.0;
+                    let state = Tensor::of_slice(&zero_vec).totype(Float);
+                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+                    (predicted_actions + state).clamp(-1.0, 1.0)
+
+                     */
+                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+                    let action = rng.gen_range(0, 5);
+                    let max_predicted_reward = predicted_actions.max();
+                    let mut t = predicted_actions.get(action);
+                    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
+                    t.copy_(&t2.squeeze());
+                    //dbg!(&predicted_actions, &action, &max_predicted_reward);
+                    predicted_actions
                 } else {
-                    tch::no_grad(|| model.actor.forward(&obs))
+                    tch::no_grad(|| model.forward(&obs))
                 }
             };
             let action = i32::from(&actions_tensor.argmax(-1, false));
@@ -161,7 +200,8 @@ pub fn main() {
             x => x as f64 / episode as f64,
         };
 
-        let tmp_target_step_avg_100 = target_step_avg_100.feed(episode_targets as f64/episode_steps as f64);
+        let tmp_target_step_avg_100 =
+            target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
         max_target_avg_100 = max_target_avg_100.max(tmp_target_avg_100);
 
@@ -179,18 +219,18 @@ pub fn main() {
             epsilon,
         };
         if evaluate {
-
         } else {
             epsilon *= epsilon_decay;
             if epsilon < epsilon_min {
                 epsilon = epsilon_min;
             }
             for _ in 0..opts.TRAINING_ITERATIONS {
-                model.train(&mut replay_buffer,opts.TRAINING_BATCH_SIZE);
+                model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
             }
         }
 
-        let tmp_steps_sec_avg_100 = steps_sec_avg_100.feed(episode_steps as f64 / start.elapsed().as_secs_f64());
+        let tmp_steps_sec_avg_100 =
+            steps_sec_avg_100.feed(episode_steps as f64 / start.elapsed().as_secs_f64());
         if output {
             println!("{:#?}", &record);
             println!("steps/sec: {}", tmp_steps_sec_avg_100);
@@ -228,22 +268,14 @@ fn get_input(stdin_channel: &Receiver<String>) -> Input {
         Ok(key) => {
             println!("Received: {}", key);
             match &key.chars().nth(0).unwrap() {
-                'q' => {
-                    Input::Quit
-                },
-                'r' => {
-                    Input::ToggleRender
-                },
-                'e' => {
-                    Input::ToggleEvaluate
-                },
-                'o' => {
-                    Input::ToggleOutput
-                },
-                _ => { Input::None}
+                'q' => Input::Quit,
+                'r' => Input::ToggleRender,
+                'e' => Input::ToggleEvaluate,
+                'o' => Input::ToggleOutput,
+                _ => Input::None,
             }
-        },
-        Err(TryRecvError::Empty) => {Input::None},
+        }
+        Err(TryRecvError::Empty) => Input::None,
         Err(TryRecvError::Disconnected) => panic!("Channel disconnected"),
     }
 }
@@ -258,12 +290,17 @@ fn spawn_stdin_channel() -> Receiver<String> {
     rx
 }
 
+#[derive(Clap, Debug, PartialEq)]
+pub enum ModelType {
+    A2C,
+    DDQN,
+}
 
 #[derive(Clap)]
 #[clap(version = "1.0")]
 struct Opts {
     /// Actor layers
-    #[clap(long, default_value = "512", )]
+    #[clap(long, default_value = "512")]
     ACTOR_LAYERS: Vec<i64>,
     /// Critic layers
     #[clap(long, default_value = "512")]
@@ -365,6 +402,9 @@ struct Opts {
     /// Env wall proximity
     #[clap(long, default_value = "10.0")]
     WALL_PROXIMITY: f64,
+    /// Model type
+    #[clap(long, arg_enum, default_value = "a2c")]
+    MODEL_TYPE: ModelType,
 }
 
 #[derive(Serialize, Debug)]
