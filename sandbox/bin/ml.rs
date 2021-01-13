@@ -1,13 +1,23 @@
+
+
 use tch::kind::Kind::Float;
 use tch::kind::{FLOAT_CPU, INT64_CPU};
 use tch::nn::OptimizerConfig;
 use tch::{nn, Device, Reduction, Tensor};
+use std::fs;
+use std::fs::File;
+use std::ops::Add;
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplayBuffer {
+    #[serde(with = "tch_serde::serde_tensor")]
     obs: Tensor,
+    #[serde(with = "tch_serde::serde_tensor")]
     next_obs: Tensor,
+    #[serde(with = "tch_serde::serde_tensor")]
     rewards: Tensor,
-    actions: Tensor,
+    #[serde(with = "tch_serde::serde_tensor")]
+    action: Tensor,
     capacity: usize,
     len: usize,
     i: usize,
@@ -19,18 +29,18 @@ impl ReplayBuffer {
             obs: Tensor::zeros(&[capacity as _, num_obs as _], FLOAT_CPU),
             next_obs: Tensor::zeros(&[capacity as _, num_obs as _], FLOAT_CPU),
             rewards: Tensor::zeros(&[capacity as _, 1], FLOAT_CPU),
-            actions: Tensor::zeros(&[capacity as _, num_actions as _], FLOAT_CPU),
+            action: Tensor::zeros(&[capacity as _, 1], INT64_CPU),
             capacity,
             len: 0,
             i: 0,
         }
     }
 
-    pub fn push(&mut self, obs: &Tensor, actions: &Tensor, reward: &Tensor, next_obs: &Tensor) {
+    pub fn push(&mut self, obs: &Tensor, action: &Tensor, reward: &Tensor, next_obs: &Tensor) {
         let i = self.i % self.capacity;
         self.obs.get(i as _).copy_(obs);
         self.rewards.get(i as _).copy_(reward);
-        self.actions.get(i as _).copy_(actions);
+        self.action.get(i as _).copy_(action);
         self.next_obs.get(i as _).copy_(next_obs);
         self.i += 1;
         if self.len < self.capacity {
@@ -48,10 +58,22 @@ impl ReplayBuffer {
 
         let states = self.obs.index_select(0, &batch_indexes);
         let next_states = self.next_obs.index_select(0, &batch_indexes);
-        let actions = self.actions.index_select(0, &batch_indexes);
+        let action = self.action.index_select(0, &batch_indexes);
         let rewards = self.rewards.index_select(0, &batch_indexes);
 
-        Some((states, actions, rewards, next_states))
+        Some((states, action, rewards, next_states))
+    }
+
+    pub fn save(&self) {
+        let text = serde_json::to_string(self).unwrap();
+        ::serde_json::to_writer(&File::create("replay_buffer.json").unwrap(), &text).unwrap()
+    }
+
+    pub fn load(path: String) -> Self {
+        let path = String::from(format!("{}", path));
+        let str = fs::read_to_string(path).unwrap();
+        let replay_buffer: ReplayBuffer = serde_json::from_str(&str).unwrap();
+        return replay_buffer
     }
 }
 
@@ -335,11 +357,13 @@ impl Model for Model_a2c {
     }
 
     fn train(&mut self, replay_buffer: &mut ReplayBuffer, batch_size: usize) {
-        let (states, actions, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
+        let (states, action, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
             Some(v) => v,
             _ => return, // We don't have enough samples for training yet.
         };
 
+        let actions = self.actor.forward(&states);
+        
         let mut q_target = self
             .critic_target
             .forward(&next_states, &self.actor_target.forward(&next_states));
@@ -358,10 +382,9 @@ impl Model for Model_a2c {
             let max_diff_indexes = diff.abs().argsort(0, true);
             for i in 0..(batch_size as f64 / 10.0).round() as i64 {
                 let index = i64::from(max_diff_indexes.get(i as i64));
-                replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+                replay_buffer.push(&states.get(index).copy(), &action.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
             }
         }
-
 
         /*
         //dbg!(&states.get(index), &actions.get(index), &rewards.get(index), &next_states.get(index));
@@ -398,7 +421,7 @@ impl Model for Model_ddqn {
     }
 
     fn train(&mut self, replay_buffer: &mut ReplayBuffer, batch_size: usize) {
-        let (states, actions, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
+        let (states, action, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
             Some(v) => v,
             _ => return, // We don't have enough samples for training yet.
         };
@@ -407,12 +430,14 @@ impl Model for Model_ddqn {
             rewards.copy() + (self.gamma * &future_predicted_reward).detach();
         let q = self.actor.forward(&states);
 
-        let actions_taken = actions.argmax(-1, false);
-        //dbg!(&actions.get(0), &rewards.get(0), &q.get(0), &q_target.get(0), &future_predicted_reward.get(0));
+        //let actions_taken = actions.argmax(-1, false);
+
+        let actions_taken = action.copy();
 
         if self.prioritized_memory {
             /* Remember worst predictions */
-            let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
+            //let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
+            let actions_taken1 = &action;
             let predicted_action_rewards = q.gather(-1, &actions_taken1, false);
             let action_rewards = q_target.gather(-1, &actions_taken1, false);
             let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
@@ -420,7 +445,7 @@ impl Model for Model_ddqn {
             let max_diff_indexes = action_diff.abs().argsort(0, true);
             for i in 0..(batch_size as f64 / 10.0).round() as i64 {
                 let index = i64::from(max_diff_indexes.get(i as i64));
-                replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+                replay_buffer.push(&states.get(index).copy(), &action.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
             }
         }
 

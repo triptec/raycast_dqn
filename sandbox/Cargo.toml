@@ -27,9 +27,12 @@ line_intersection = { path = "../line_intersection"}
 rand = "*"
 rayon = "*"
 tch = "*"
+tch-serde = "0.3.1"
 sdl2 = { version = "0.34.3" }
 csv = "*"
 serde = { version = "*", features=["derive"]}
+serde_json = "*"
+serde_derive = "*"
 moving_avg = "*"
 clap = { version = "3.0.0-beta.2", features=["derive"]}
 chrono = "*"

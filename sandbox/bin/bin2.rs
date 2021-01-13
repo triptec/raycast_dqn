@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate clap;
 use clap::ArgEnum;
+extern crate serde_json;
+#[macro_use] extern crate serde_derive;
 
 use std::io::Read;
 use std::sync::mpsc;
@@ -177,7 +179,7 @@ pub fn main() {
 
             let state_t = Tensor::of_slice(&state).totype(Float);
             if !evaluate {
-                replay_buffer.push(&obs, &actions_tensor.into(), &reward.into(), &state_t);
+                replay_buffer.push(&obs, &action.into(), &reward.into(), &state_t);
             }
             if done {
                 break;
