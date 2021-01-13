@@ -17,7 +17,7 @@ configs = []
 for layer in layers:
     for model in models:
         for pm in prioritized_memory:
-            configs.push({
+            configs.append({
                 "layer": layer,
                 "model-type": model,
                 "prioritized-memory": pm,
