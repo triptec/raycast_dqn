@@ -233,6 +233,7 @@ pub struct Model_a2c {
     num_actions: usize,
     actor_learning_rate: f64,
     critic_learning_rate: f64,
+    prioritized_memory: bool,
     layers: Vec<i64>,
 }
 
@@ -244,6 +245,7 @@ impl Model_a2c {
         tau: f64,
         actor_learning_rate: f64,
         critic_learning_rate: f64,
+        prioritized_memory: bool,
         layers: Vec<i64>,
     ) -> Self {
         let actor = Actor::new(num_obs, num_actions, actor_learning_rate, layers.clone());
@@ -261,6 +263,7 @@ impl Model_a2c {
             num_actions,
             actor_learning_rate,
             critic_learning_rate,
+            prioritized_memory: bool,
             layers: layers.clone(),
         }
     }
@@ -274,6 +277,7 @@ pub struct Model_ddqn {
     num_obs: usize,
     num_actions: usize,
     learning_rate: f64,
+    prioritized_memory: bool,
     layers: Vec<i64>,
 }
 
@@ -284,6 +288,7 @@ impl Model_ddqn {
         gamma: f64,
         tau: f64,
         learning_rate: f64,
+        prioritized_memory: bool,
         layers: Vec<i64>,
     ) -> Self {
         let actor = Actor::new(num_obs, num_actions, learning_rate, layers.clone());
@@ -296,6 +301,7 @@ impl Model_ddqn {
             num_obs,
             num_actions,
             learning_rate,
+            prioritized_memory
             layers: layers.clone(),
         }
     }
@@ -348,10 +354,12 @@ impl Model for Model_a2c {
         let index = i64::from(max_diff_index);
         */
 
-        let max_diff_indexes = diff.abs().argsort(0, true);
-        for i in 0..(batch_size as f64 / 10.0).round() as i64 {
-            let index = i64::from(max_diff_indexes.get(i as i64));
-            replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+        if self.prioritized_memory {
+            let max_diff_indexes = diff.abs().argsort(0, true);
+            for i in 0..(batch_size as f64 / 10.0).round() as i64 {
+                let index = i64::from(max_diff_indexes.get(i as i64));
+                replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+            }
         }
 
 
@@ -401,22 +409,20 @@ impl Model for Model_ddqn {
 
         let actions_taken = actions.argmax(-1, false);
         //dbg!(&actions.get(0), &rewards.get(0), &q.get(0), &q_target.get(0), &future_predicted_reward.get(0));
-        /* Remember worst predictions */
 
-        let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
-        let predicted_action_rewards = q.gather(-1, &actions_taken1, false);
-        let action_rewards = q_target.gather(-1, &actions_taken1, false);
-        let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
-        //dbg!(&q.get(0), &q_target.get(0), &actions.get(0), &actions_taken.get(0), &predicted_action_rewards.get(0), &action_rewards.get(0), &action_diff.get(0));
-        let max_diff_indexes = action_diff.abs().argsort(0, true);
-        for i in 0..(batch_size as f64 / 10.0).round() as i64 {
-            let index = i64::from(max_diff_indexes.get(i as i64));
-            replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+        if self.prioritized_memory {
+            /* Remember worst predictions */
+            let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
+            let predicted_action_rewards = q.gather(-1, &actions_taken1, false);
+            let action_rewards = q_target.gather(-1, &actions_taken1, false);
+            let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
+            //dbg!(&q.get(0), &q_target.get(0), &actions.get(0), &actions_taken.get(0), &predicted_action_rewards.get(0), &action_rewards.get(0), &action_diff.get(0));
+            let max_diff_indexes = action_diff.abs().argsort(0, true);
+            for i in 0..(batch_size as f64 / 10.0).round() as i64 {
+                let index = i64::from(max_diff_indexes.get(i as i64));
+                replay_buffer.push(&states.get(index).copy(), &actions.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+            }
         }
-
-
-        //let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
-        //&action_diff.print();
 
         let mut q1 = q.copy();
         for i in 0..batch_size {

@@ -79,6 +79,7 @@ pub fn main() {
             opts.TAU,
             opts.ACTOR_LEARNING_RATE,
             opts.CRITIC_LEARNING_RATE,
+            opts.PRIORITIZED_MEMORY,
             opts.ACTOR_LAYERS,
         )),
         ModelType::DDQN => Box::new(Model_ddqn::new(
@@ -87,6 +88,7 @@ pub fn main() {
             opts.GAMMA,
             opts.TAU,
             opts.ACTOR_LEARNING_RATE,
+            opts.PRIORITIZED_MEMORY,
             opts.ACTOR_LAYERS,
         )),
     };
@@ -314,6 +316,9 @@ struct Opts {
     /// Should enable rendering.
     #[clap(long, default_value = "true", parse(try_from_str))]
     RENDER: bool,
+    /// Should enable prioritized memories.
+    #[clap(long, default_value = "true", parse(try_from_str))]
+    PRIORITIZED_MEMORY: bool,
     /// The impact of the q value of the next state on the current state's q value.
     #[clap(long, default_value = "0.997")]
     GAMMA: f64,
