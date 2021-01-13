@@ -263,7 +263,7 @@ impl Model_a2c {
             num_actions,
             actor_learning_rate,
             critic_learning_rate,
-            prioritized_memory: bool,
+            prioritized_memory,
             layers: layers.clone(),
         }
     }
@@ -301,7 +301,7 @@ impl Model_ddqn {
             num_obs,
             num_actions,
             learning_rate,
-            prioritized_memory
+            prioritized_memory,
             layers: layers.clone(),
         }
     }
