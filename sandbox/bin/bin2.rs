@@ -111,6 +111,7 @@ pub fn main() {
         ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions)
     };
     let mut fill_replay = opts.SAVE_REPLAY_BUFFER.is_some();
+    let mut prefill_replay = opts.PREFILL_BUFFER.is_some();
     let mut epsilon = opts.EPSILON;
     let mut epsilon_min = opts.MIN_EPSILON;
     let mut epsilon_decay = opts.EPSILON_DECAY;
@@ -157,7 +158,7 @@ pub fn main() {
         let mut episode_steps = 0;
 
         loop {
-            let action = if fill_replay {
+            let action = if fill_replay || prefill_replay {
                 i32::from(rng.gen_range(0..5))
             } else if evaluate {
                 i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
@@ -224,7 +225,11 @@ pub fn main() {
             epsilon,
         };
 
-        if evaluate {
+        if evaluate {}
+        else if prefill_replay {
+            if replay_buffer.len >= opts.PREFILL_BUFFER.clone().unwrap() as usize {
+                prefill_replay = false;
+            }
         } else if fill_replay {
             if dbg!(replay_buffer.len) == dbg!(replay_buffer.capacity) {
                 replay_buffer.save(opts.SAVE_REPLAY_BUFFER.clone().unwrap());
@@ -435,6 +440,10 @@ struct Opts {
     /// Save replay buffer
     #[clap(long)]
     LOAD_REPLAY_BUFFER: Option<String>,
+    /// prefill replay buffer
+    #[clap(long)]
+    PREFILL_BUFFER: Option<i32>,
+
 }
 
 #[derive(Serialize, Debug)]
