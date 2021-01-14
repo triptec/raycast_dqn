@@ -121,9 +121,9 @@ impl Env {
         // Target
         reward = reward - state[0].abs() / 3.0; // self.reward_target_bearing_mult;
         reward = reward - state[1] / 3.0; //* self.reward_target_steps_mult; // steps_to_target / 3
-                                                                    // Past position
-                                                                    //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
-                                                                    //reward = reward - (1.0-state[3]) / 20.0; //
+                                          // Past position
+                                          //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
+                                          //reward = reward - (1.0-state[3]) / 20.0; //
         if state[1] * 1000.0 < 10.0 {
             state = self.agents[a as usize].last_state.iter().copied().collect();
             reward = self.reward_target_found;

@@ -5,7 +5,7 @@ import multiprocessing
 def work(config):
     print(config)
     return os.system(
-        f'cargo run --release -- --stats-file {config["model-type"]}-{config["layer"].replace(" ", "-")}-pm{config["prioritized-memory"]}.csv --prioritized-memory {config["prioritized-memory"]} --actor-layers {config["layer"]} --model-type {config["model-type"]} --max-episodes 10000 --agent-max-age 1000 --render false > /dev/null 2>&1')
+        f'cargo run --release -- --stats-file {config["model-type"]}-{config["layer"].replace(" ", "-")}-pm{config["prioritized-memory"]}-rpb-250k.csv --prioritized-memory {config["prioritized-memory"]} --actor-layers {config["layer"]} --model-type {config["model-type"]} --load-replay-buffer replay-buffer-250k.json --max-episodes 10000 --agent-max-age 1000 --render false > /dev/null 2>&1')
 
 
 layers = ["512 512", "1024 1024"]

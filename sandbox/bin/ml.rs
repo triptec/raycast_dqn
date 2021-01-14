@@ -1,13 +1,11 @@
-
-
+use std::fs;
+use std::fs::File;
+use std::io::BufReader;
+use std::ops::Add;
 use tch::kind::Kind::Float;
 use tch::kind::{FLOAT_CPU, INT64_CPU};
 use tch::nn::OptimizerConfig;
 use tch::{nn, Device, Reduction, Tensor};
-use std::fs;
-use std::fs::File;
-use std::ops::Add;
-use std::io::BufReader;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplayBuffer {
@@ -370,7 +368,6 @@ impl Model for Model_a2c {
             action_tensor.copy_(&t2.squeeze());
         }
 
-
         let mut q_target = self
             .critic_target
             .forward(&next_states, &self.actor_target.forward(&next_states));
@@ -389,7 +386,12 @@ impl Model for Model_a2c {
             let max_diff_indexes = diff.abs().argsort(0, true);
             for i in 0..(batch_size as f64 / 10.0).round() as i64 {
                 let index = i64::from(max_diff_indexes.get(i as i64));
-                replay_buffer.push(&states.get(index).copy(), &action.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+                replay_buffer.push(
+                    &states.get(index).copy(),
+                    &action.get(index).copy(),
+                    &rewards.get(index).copy(),
+                    &next_states.get(index).copy(),
+                )
             }
         }
 
@@ -433,8 +435,7 @@ impl Model for Model_ddqn {
             _ => return, // We don't have enough samples for training yet.
         };
         let future_predicted_reward = self.actor_target.forward(&next_states);
-        let mut q_target =
-            rewards.copy() + (self.gamma * &future_predicted_reward).detach();
+        let mut q_target = rewards.copy() + (self.gamma * &future_predicted_reward).detach();
         let q = self.actor.forward(&states);
 
         //let actions_taken = actions.argmax(-1, false);
@@ -452,7 +453,12 @@ impl Model for Model_ddqn {
             let max_diff_indexes = action_diff.abs().argsort(0, true);
             for i in 0..(batch_size as f64 / 10.0).round() as i64 {
                 let index = i64::from(max_diff_indexes.get(i as i64));
-                replay_buffer.push(&states.get(index).copy(), &action.get(index).copy(), &rewards.get(index).copy(), &next_states.get(index).copy())
+                replay_buffer.push(
+                    &states.get(index).copy(),
+                    &action.get(index).copy(),
+                    &rewards.get(index).copy(),
+                    &next_states.get(index).copy(),
+                )
             }
         }
 

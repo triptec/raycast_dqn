@@ -2,7 +2,8 @@
 extern crate clap;
 use clap::ArgEnum;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use std::io::Read;
 use std::sync::mpsc;
@@ -97,7 +98,9 @@ pub fn main() {
 
     let mut replay_buffer = if let Some(path) = opts.LOAD_REPLAY_BUFFER {
         let mut replay_buffer = ReplayBuffer::load(path);
-        let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round() as usize) * opts.TRAINING_ITERATIONS;
+        let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round()
+            as usize)
+            * opts.TRAINING_ITERATIONS;
         for i in 0..train_count {
             dbg!(i, train_count);
             model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
@@ -153,18 +156,18 @@ pub fn main() {
         let mut episode_steps = 0;
 
         loop {
-            let actions_tensor = if fill_replay {
-                get_random_actions(&mut rng, &mut model, &mut obs)
+            let action = if fill_replay {
+                i32::from(rng.gen_range(0, 5))
             } else if evaluate {
-                tch::no_grad(|| model.forward(&obs))
+                i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
             } else {
                 if rng.gen_range(0.0, 1.0) < epsilon {
-                    get_random_actions(&mut rng, &mut model, &mut obs)
+                    i32::from(rng.gen_range(0, 5))
                 } else {
-                    tch::no_grad(|| model.forward(&obs))
+                    i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
                 }
             };
-            let action = i32::from(&actions_tensor.argmax(-1, false));
+
             let (state, reward, done) = env.step(action, 0);
             if render {
                 render_env(&mut env, &mut renderer);
@@ -220,13 +223,13 @@ pub fn main() {
             epsilon,
         };
         if evaluate {
-
-        }
-        else if fill_replay {
+        } else if fill_replay {
             if dbg!(replay_buffer.len) == dbg!(replay_buffer.capacity) {
                 replay_buffer.save(opts.SAVE_REPLAY_BUFFER.clone().unwrap());
                 fill_replay = false;
-                let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round() as usize) * opts.TRAINING_ITERATIONS;
+                let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64)
+                    .round() as usize)
+                    * opts.TRAINING_ITERATIONS;
                 for i in 0..train_count {
                     dbg!(i, train_count);
                     model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
@@ -253,7 +256,11 @@ pub fn main() {
     }
 }
 
-fn get_random_actions(rng: &mut StdRng, mut model: &mut Box<dyn Model>, obs: &mut Tensor) -> Tensor {
+fn get_random_actions(
+    rng: &mut StdRng,
+    mut model: &mut Box<dyn Model>,
+    obs: &mut Tensor,
+) -> Tensor {
     let predicted_actions = tch::no_grad(|| model.forward(&obs));
     let action = rng.gen_range(0, 5);
     let max_predicted_reward = predicted_actions.max();
@@ -360,7 +367,7 @@ struct Opts {
     #[clap(long, default_value = "1000")]
     EPISODE_LENGTH: usize,
     /// The number of training iterations after one episode finishes.
-    #[clap(long, default_value = "2")]
+    #[clap(long, default_value = "1")]
     TRAINING_ITERATIONS: usize,
     /// Ornstein-Uhlenbeck process parameter MU.
     #[clap(long, default_value = "0.0")]
