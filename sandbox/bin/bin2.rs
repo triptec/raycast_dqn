@@ -98,13 +98,14 @@ pub fn main() {
 
     let mut replay_buffer = if let Some(path) = opts.LOAD_REPLAY_BUFFER {
         let mut replay_buffer = ReplayBuffer::load(path);
+        /*
         let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round()
             as usize)
             * opts.TRAINING_ITERATIONS;
         for i in 0..train_count {
             dbg!(i, train_count);
             model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
-        }
+        }*/
         replay_buffer
     } else {
         ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions)
@@ -157,12 +158,12 @@ pub fn main() {
 
         loop {
             let action = if fill_replay {
-                i32::from(rng.gen_range(0, 5))
+                i32::from(rng.gen_range(0..5))
             } else if evaluate {
                 i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
             } else {
-                if rng.gen_range(0.0, 1.0) < epsilon {
-                    i32::from(rng.gen_range(0, 5))
+                if rng.gen_range(0.0..=1.0) < epsilon {
+                    i32::from(rng.gen_range(0..5))
                 } else {
                     i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
                 }
@@ -222,11 +223,13 @@ pub fn main() {
             max_target_avg_100: max_target_avg_100,
             epsilon,
         };
+
         if evaluate {
         } else if fill_replay {
             if dbg!(replay_buffer.len) == dbg!(replay_buffer.capacity) {
                 replay_buffer.save(opts.SAVE_REPLAY_BUFFER.clone().unwrap());
                 fill_replay = false;
+                /*
                 let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64)
                     .round() as usize)
                     * opts.TRAINING_ITERATIONS;
@@ -234,6 +237,8 @@ pub fn main() {
                     dbg!(i, train_count);
                     model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
                 }
+
+                 */
             }
         } else {
             epsilon *= epsilon_decay;
@@ -254,21 +259,6 @@ pub fn main() {
         wtr.serialize(record).unwrap();
         wtr.flush().unwrap();
     }
-}
-
-fn get_random_actions(
-    rng: &mut StdRng,
-    mut model: &mut Box<dyn Model>,
-    obs: &mut Tensor,
-) -> Tensor {
-    let predicted_actions = tch::no_grad(|| model.forward(&obs));
-    let action = rng.gen_range(0, 5);
-    let max_predicted_reward = predicted_actions.max();
-    let mut t = predicted_actions.get(action);
-    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
-    t.copy_(&t2.squeeze());
-    //dbg!(&predicted_actions, &action, &max_predicted_reward);
-    predicted_actions
 }
 
 fn render_env(env: &mut Env, renderer: &mut Renderer) {

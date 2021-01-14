@@ -73,8 +73,8 @@ impl MyNoise {
 
     fn sample(&mut self) -> &Tensor {
         self.state = Tensor::zeros(&[self.num_actions as _], FLOAT_CPU);
-        if (self.rng.gen_range(0.0, 1.0) < self.epsilon) {
-            let action = self.rng.gen_range(0, 5);
+        if (self.rng.gen_range(0.0..=1.0) < self.epsilon) {
+            let action = self.rng.gen_range(0..5);
             //println!("random action {}", &action);
             let mut zero_vec = vec![0.0; self.num_actions];
             zero_vec[action] = 2.0;

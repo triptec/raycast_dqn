@@ -46,7 +46,7 @@ impl Agent {
         Agent {
             speed, // 0.0045
             age: 1.0,
-            direction: rand::thread_rng().gen_range(-3.14, 3.14),
+            direction: rand::thread_rng().gen_range(-3.14..=3.14),
             ray_count,
             fov: fov.to_radians(),
             visibility,
@@ -93,7 +93,7 @@ impl Agent {
     }
 
     pub(crate) fn reset(&mut self, mut position: Point<f64>) {
-        self.direction = rand::thread_rng().gen_range(-3.14, 3.14);
+        self.direction = rand::thread_rng().gen_range(-3.14..=3.14);
         self.position = position.clone();
         self.rays = vec![];
         self.rays_bb = Rect::new(

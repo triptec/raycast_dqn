@@ -24,15 +24,16 @@ path = "bin/bin2.rs"
 geo = "0.14.2"
 geojson = { version = "0.19.0", features=["geo-types"] }
 line_intersection = { path = "../line_intersection"}
-rand = "*"
-rayon = "*"
-tch = "*"
+rand = "0.8.2"
+rayon = "1.5.0"
+tch = "0.3.1"
 tch-serde = "0.3.1"
 sdl2 = { version = "0.34.3" }
-csv = "*"
+csv = "1.1.5"
 serde = { version = "*", features=["derive"]}
-serde_json = "*"
-serde_derive = "*"
-moving_avg = "*"
+serde_json = "1.0.61"
+serde_derive = "1.0.119"
+moving_avg = "0.2.0"
 clap = { version = "3.0.0-beta.2", features=["derive"]}
-chrono = "*"
+chrono = "0.4.19"
+ndarray = "0.13"

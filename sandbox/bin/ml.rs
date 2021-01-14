@@ -6,6 +6,7 @@ use tch::kind::Kind::Float;
 use tch::kind::{FLOAT_CPU, INT64_CPU};
 use tch::nn::OptimizerConfig;
 use tch::{nn, Device, Reduction, Tensor};
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplayBuffer {
@@ -408,6 +409,8 @@ impl Model for Model_a2c {
             .critic
             .forward(&states, &self.actor.forward(&states))
             .mean(Float);
+        let nd: ndarray::ArrayD<f64> = (&actor_loss.copy()).try_into().unwrap();
+        dbg!(&nd);
         self.actor.optimizer.zero_grad();
         actor_loss.backward();
         self.actor.optimizer.step();
