@@ -7,6 +7,7 @@ use tch::{nn, Device, Reduction, Tensor};
 use std::fs;
 use std::fs::File;
 use std::ops::Add;
+use std::io::BufReader;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplayBuffer {
@@ -18,8 +19,8 @@ pub struct ReplayBuffer {
     rewards: Tensor,
     #[serde(with = "tch_serde::serde_tensor")]
     action: Tensor,
-    capacity: usize,
-    len: usize,
+    pub capacity: usize,
+    pub len: usize,
     i: usize,
 }
 
@@ -64,16 +65,14 @@ impl ReplayBuffer {
         Some((states, action, rewards, next_states))
     }
 
-    pub fn save(&self) {
-        let text = serde_json::to_string(self).unwrap();
-        ::serde_json::to_writer(&File::create("replay_buffer.json").unwrap(), &text).unwrap()
+    pub fn save(&self, path: String) {
+        ::serde_json::to_writer(&File::create(path).unwrap(), &self).unwrap();
     }
 
     pub fn load(path: String) -> Self {
-        let path = String::from(format!("{}", path));
-        let str = fs::read_to_string(path).unwrap();
-        let replay_buffer: ReplayBuffer = serde_json::from_str(&str).unwrap();
-        return replay_buffer
+        let reader = BufReader::new(File::open(path).unwrap());
+        let replay_buffer = serde_json::from_reader(reader).unwrap();
+        return replay_buffer;
     }
 }
 
@@ -362,8 +361,16 @@ impl Model for Model_a2c {
             _ => return, // We don't have enough samples for training yet.
         };
 
-        let actions = self.actor.forward(&states);
-        
+        let actions = tch::no_grad(|| self.actor.forward(&states));
+        for i in 0..batch_size as i64 {
+            let mut predicted_rewards = actions.get(i);
+            let max_predicted_reward = actions.get(i).max();
+            let mut action_tensor = predicted_rewards.get(i64::from(action.get(i)));
+            let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
+            action_tensor.copy_(&t2.squeeze());
+        }
+
+
         let mut q_target = self
             .critic_target
             .forward(&next_states, &self.actor_target.forward(&next_states));

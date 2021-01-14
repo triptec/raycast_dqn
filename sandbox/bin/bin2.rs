@@ -95,12 +95,22 @@ pub fn main() {
         )),
     };
 
-    let mut replay_buffer = ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions);
-
+    let mut replay_buffer = if let Some(path) = opts.LOAD_REPLAY_BUFFER {
+        let mut replay_buffer = ReplayBuffer::load(path);
+        let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round() as usize) * opts.TRAINING_ITERATIONS;
+        for i in 0..train_count {
+            dbg!(i, train_count);
+            model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
+        }
+        replay_buffer
+    } else {
+        ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions)
+    };
+    let mut fill_replay = opts.SAVE_REPLAY_BUFFER.is_some();
     let mut epsilon = opts.EPSILON;
     let mut epsilon_min = opts.MIN_EPSILON;
     let mut epsilon_decay = opts.EPSILON_DECAY;
-    let mut episode = 0;
+    let mut episode = 0i32;
     let mut total_steps = 0;
     let mut total_targets: i32 = 0;
     let mut total_rewards: f64 = 0.0;
@@ -111,7 +121,7 @@ pub fn main() {
     let mut evaluate = false;
     let mut output = true;
     let mut render = false;
-    'running: for _ in 0..opts.MAX_EPISODES as i32 {
+    'running: loop {
         let input = match renderer.get_input() {
             Input::None => get_input(&stdin_channel),
             i => i,
@@ -143,30 +153,13 @@ pub fn main() {
         let mut episode_steps = 0;
 
         loop {
-            let actions_tensor = if evaluate {
+            let actions_tensor = if fill_replay {
+                get_random_actions(&mut rng, &mut model, &mut obs)
+            } else if evaluate {
                 tch::no_grad(|| model.forward(&obs))
             } else {
                 if rng.gen_range(0.0, 1.0) < epsilon {
-                    //let actions: Vec<f64> = (0..num_actions).map(|_| {rng.gen_range(-1.0, 1.0)}).collect();
-                    //Tensor::of_slice(&actions).totype(Float)
-
-                    /*
-                    let action = rng.gen_range(0, 5);
-                    let mut zero_vec = vec![0.0; num_actions];
-                    zero_vec[action] = 2.0;
-                    let state = Tensor::of_slice(&zero_vec).totype(Float);
-                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
-                    (predicted_actions + state).clamp(-1.0, 1.0)
-
-                     */
-                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
-                    let action = rng.gen_range(0, 5);
-                    let max_predicted_reward = predicted_actions.max();
-                    let mut t = predicted_actions.get(action);
-                    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
-                    t.copy_(&t2.squeeze());
-                    //dbg!(&predicted_actions, &action, &max_predicted_reward);
-                    predicted_actions
+                    get_random_actions(&mut rng, &mut model, &mut obs)
                 } else {
                     tch::no_grad(|| model.forward(&obs))
                 }
@@ -189,11 +182,15 @@ pub fn main() {
             episode_rewards += reward;
         }
         let episode_targets = env.agents.get(0).unwrap().targets_found;
-        if !evaluate {
+        if !evaluate && !fill_replay {
             total_targets += episode_targets;
             total_rewards += episode_rewards;
             total_steps += episode_steps;
             episode += 1;
+
+            if episode >= opts.MAX_EPISODES as i32 {
+                break 'running;
+            }
         }
         let targets_per_step = match total_targets {
             0 => 0f64,
@@ -223,6 +220,18 @@ pub fn main() {
             epsilon,
         };
         if evaluate {
+
+        }
+        else if fill_replay {
+            if dbg!(replay_buffer.len) == dbg!(replay_buffer.capacity) {
+                replay_buffer.save(opts.SAVE_REPLAY_BUFFER.clone().unwrap());
+                fill_replay = false;
+                let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round() as usize) * opts.TRAINING_ITERATIONS;
+                for i in 0..train_count {
+                    dbg!(i, train_count);
+                    model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
+                }
+            }
         } else {
             epsilon *= epsilon_decay;
             if epsilon < epsilon_min {
@@ -242,6 +251,17 @@ pub fn main() {
         wtr.serialize(record).unwrap();
         wtr.flush().unwrap();
     }
+}
+
+fn get_random_actions(rng: &mut StdRng, mut model: &mut Box<dyn Model>, obs: &mut Tensor) -> Tensor {
+    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+    let action = rng.gen_range(0, 5);
+    let max_predicted_reward = predicted_actions.max();
+    let mut t = predicted_actions.get(action);
+    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
+    t.copy_(&t2.squeeze());
+    //dbg!(&predicted_actions, &action, &max_predicted_reward);
+    predicted_actions
 }
 
 fn render_env(env: &mut Env, renderer: &mut Renderer) {
@@ -340,7 +360,7 @@ struct Opts {
     #[clap(long, default_value = "1000")]
     EPISODE_LENGTH: usize,
     /// The number of training iterations after one episode finishes.
-    #[clap(long, default_value = "1")]
+    #[clap(long, default_value = "2")]
     TRAINING_ITERATIONS: usize,
     /// Ornstein-Uhlenbeck process parameter MU.
     #[clap(long, default_value = "0.0")]
@@ -412,6 +432,12 @@ struct Opts {
     /// Model type
     #[clap(long, arg_enum, default_value = "a2c")]
     MODEL_TYPE: ModelType,
+    /// Save replay buffer
+    #[clap(long)]
+    SAVE_REPLAY_BUFFER: Option<String>,
+    /// Save replay buffer
+    #[clap(long)]
+    LOAD_REPLAY_BUFFER: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
