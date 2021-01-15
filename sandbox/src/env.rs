@@ -74,9 +74,10 @@ impl Env {
         relative_bearing_to_target,
         steps_to_target,
         past_position_bearing,
+        steps_to_past_position,
         rays
         */
-        3 + self.agents.get(0).unwrap().ray_count as usize
+        4 + self.agents.get(0).unwrap().ray_count as usize
     }
 
     pub fn step(&mut self, action: i32, a: i32) -> (Vec<f64>, f64, bool) {
@@ -164,6 +165,8 @@ impl Env {
         let steps_to_target = (distance_to_target / self.agents[a as usize].speed) / 1000.0;
         state.push(steps_to_target);
         state.push(self.agents[a as usize].past_position_bearing / 3.14159);
+        let steps_to_past_position = (self.agents[a as usize].past_position_distance / self.agents[a as usize].speed) / 1000.0;
+        state.push(steps_to_past_position);
         let mut ray_lengths = self.agents[a as usize]
             .rays
             .iter()

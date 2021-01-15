@@ -25,10 +25,11 @@ pub struct Agent {
     pub collected_targets: Vec<Point<f64>>,
     pub last_state: Vec<f64>,
     pub env_line_strings: Vec<LineString<f64>>,
+    pub near_env_line_strings: Vec<LineString<f64>>,
+    pub near_zone: Rect<f64>,
+    pub recalc: i32,
     pub targets_found: i32,
-    pub position_ticker: i32,
-    pub position_ticker_start: i32,
-    pub past_positions: Vec<Point<f64>>,
+    pub past_position: Point<f64>,
     pub past_position_distance: f64,
     pub past_position_bearing: f64,
 }
@@ -41,7 +42,6 @@ impl Agent {
         visibility: f64,
         max_age: i32,
         food: i32,
-        position_ticker: i32,
     ) -> Self {
         Agent {
             speed, // 0.0045
@@ -63,9 +63,7 @@ impl Agent {
             targets_found: 0,
             closest_target: Point::new(0.0, 0.0),
             active: true,
-            position_ticker,
-            position_ticker_start: position_ticker,
-            past_positions: vec![],
+            past_position: Point::new(0.0, 0.0),
             past_position_distance: 0.0,
             past_position_bearing: 0.0,
             last_state: vec![],
@@ -78,6 +76,12 @@ impl Agent {
             ],
             prev_state: vec![],
             env_line_strings: vec![],
+            near_env_line_strings: vec![],
+            near_zone: Rect::new(
+                (f64::NEG_INFINITY, f64::NEG_INFINITY),
+                (f64::INFINITY, f64::INFINITY),
+            ),
+            recalc: 0,
         }
     }
 
@@ -89,7 +93,7 @@ impl Agent {
         self.env_line_strings = env_line_strings;
         self.collected_targets = vec![position.clone()];
         self.position = position;
-        self.past_positions = vec![position];
+        self.past_position = position;
     }
 
     pub(crate) fn reset(&mut self, mut position: Point<f64>) {
@@ -100,14 +104,19 @@ impl Agent {
             (f64::NEG_INFINITY, f64::NEG_INFINITY),
             (f64::INFINITY, f64::INFINITY),
         );
+        self.near_zone = Rect::new(
+            (f64::NEG_INFINITY, f64::NEG_INFINITY),
+            (f64::INFINITY, f64::INFINITY),
+        );
+        self.near_env_line_strings = vec![];
+        self.recalc = 0;
         self.collected_targets = vec![position.clone()];
         self.targets_found = 0;
         self.closest_target = Point::new(0.0, 0.0);
         self.active = true;
         self.age = 1.0;
         self.food = self.food_start;
-        self.position_ticker = self.position_ticker_start;
-        self.past_positions = vec![position];
+        self.past_position = position;
         self.past_position_distance = 0.0;
         self.past_position_bearing = 0.0;
         self.last_state = vec![];
@@ -134,55 +143,59 @@ impl Agent {
         if self.collected_targets.len() as i32 == n_targets {
             self.collected_targets = vec![];
         }
-        self.past_positions = vec![self.position];
-        self.position_ticker = 0;
     }
 
     pub fn step(&mut self, action: usize) {
         let step_size = self.speed;
         let direction_change = self.action_space.get(action as usize).unwrap();
-        self.position_ticker = self.position_ticker - 1;
-        if self.position_ticker <= 0 {
-            self.position_ticker = self.position_ticker_start;
-            self.past_positions.push(self.position);
-        }
-        if self.past_positions.len() > 3 {
-            self.past_positions = self
-                .past_positions
-                .drain(self.past_positions.len() - 3..)
-                .collect();
-        }
+
         if self.food <= 0.0 {
             self.active = false;
         }
         if self.age > self.max_age {
             self.active = false;
         }
-        self.direction += direction_change;
-        if self.direction > 3.14159 {
-            self.direction = self.direction - 3.14159 * 2.0;
+
+        if direction_change == &300.0f64 {
+            self.past_position = self.position;
+        } else {
+            self.direction += direction_change;
+            if self.direction > 3.14159 {
+                self.direction = self.direction - 3.14159 * 2.0;
+            }
+            if self.direction < -3.14159 {
+                self.direction = self.direction + 3.14159 * 2.0;
+            }
+
+            let new_position = Point::new(
+                self.position.x() + step_size * self.direction.cos(),
+                self.position.y() + step_size * self.direction.sin(),
+            );
+            self.position = new_position;
         }
-        if self.direction < -3.14159 {
-            self.direction = self.direction + 3.14159 * 2.0;
-        }
-        let closest_past_position =
-            utils::closest_of(self.past_positions.iter(), self.position).unwrap();
-        let new_position = Point::new(
-            self.position.x() + step_size * self.direction.cos(),
-            self.position.y() + step_size * self.direction.sin(),
-        );
-        self.past_position_distance = self.position.euclidean_distance(&closest_past_position);
+
+        self.past_position_distance = self.position.euclidean_distance(&self.past_position);
         self.past_position_bearing =
-            utils::relative_bearing_to_target(self.position, new_position, closest_past_position);
-        self.position = new_position;
+            utils::relative_bearing_to_target(self.position, self.position, self.past_position);
         self.cast_rays();
         self.update();
     }
 
     pub fn update(&mut self) {
+        if self.recalc <= 0 {
+            let max_dist = (self.speed * 100.0) + self.visibility;
+            self.near_zone = Rect::new((self.position.x() - max_dist, self.position.y() - max_dist), (self.position.x() + max_dist, self.position.y() + max_dist));
+            self.near_env_line_strings = utils::cull_line_strings_precull(
+                &mut self.near_zone,
+                &self.env_line_strings,
+                self.position,
+            ).iter().map(|l|l.to_owned().clone()).collect::<Vec<_>>();
+            self.recalc = 100;
+        }
+        self.recalc -= 1;
         let intersecting_line_strings = utils::cull_line_strings_precull(
             &mut self.rays_bb,
-            &self.env_line_strings,
+            &self.near_env_line_strings,
             self.position,
         );
         utils::find_intersections_par(&mut self.rays, &intersecting_line_strings, self.position)

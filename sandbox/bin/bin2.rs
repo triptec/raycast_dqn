@@ -33,6 +33,7 @@ use sandbox::env::Env;
 
 use crate::ml::{Model, Model_a2c, Model_ddqn};
 use crate::renderer::Renderer;
+use geo::{Line, Coordinate};
 
 mod input;
 mod ml;
@@ -55,7 +56,6 @@ pub fn main() {
         opts.AGENT_VISIBILITY,
         opts.AGENT_MAX_AGE,
         opts.AGENT_FOOD,
-        opts.AGENT_POSITION_TICKER,
     );
     let mut env = Env::new(
         opts.ENV_FILE,
@@ -159,12 +159,12 @@ pub fn main() {
 
         loop {
             let action = if fill_replay || prefill_replay {
-                i32::from(rng.gen_range(0..5))
+                i32::from(rng.gen_range(0..env.action_space() as i32))
             } else if evaluate {
                 i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
             } else {
                 if rng.gen_range(0.0..=1.0) < epsilon {
-                    i32::from(rng.gen_range(0..5))
+                    i32::from(rng.gen_range(0..env.action_space() as i32))
                 } else {
                     i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
                 }
@@ -270,8 +270,19 @@ fn render_env(env: &mut Env, renderer: &mut Renderer) {
     renderer.render = true;
     renderer.init();
     renderer.clear();
+
     renderer.render_line_strings(
         &env.line_strings.iter().collect(),
+        Color::RGB(192, 192, 192),
+        &env.agents.get(0).unwrap().position,
+    );
+    renderer.render_line_strings(
+        &vec![env.agents.get(0).unwrap().near_zone.to_polygon().exterior()],
+        Color::RGB(0, 0, 255),
+        &env.agents.get(0).unwrap().position,
+    );
+    renderer.render_line_strings(
+        &env.agents.get(0).unwrap().near_env_line_strings.iter().collect(),
         Color::RGB(0, 255, 0),
         &env.agents.get(0).unwrap().position,
     );
@@ -285,6 +296,8 @@ fn render_env(env: &mut Env, renderer: &mut Renderer) {
         Color::RGB(0, 0, 255),
         &env.agents.get(0).unwrap().position,
     );
+    let lines = vec![Line::new(env.agents.get(0).unwrap().position.clone(), env.agents.get(0).unwrap().past_position.clone())];
+    renderer.render_lines(&lines,Color::RGB(255, 0, 0), &env.agents.get(0).unwrap().position);
     renderer.present();
     renderer.render = false;
 }
