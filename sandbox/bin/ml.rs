@@ -360,7 +360,7 @@ impl Model for Model_a2c {
             _ => return, // We don't have enough samples for training yet.
         };
 
-        let actions = tch::no_grad(|| self.actor.forward(&states));
+        let actions = tch::no_grad(|| self.actor_target.forward(&states));
         for i in 0..batch_size as i64 {
             let mut predicted_rewards = actions.get(i);
             let max_predicted_reward = actions.get(i).max();

@@ -99,14 +99,13 @@ pub fn main() {
 
     let mut replay_buffer = if let Some(path) = opts.LOAD_REPLAY_BUFFER {
         let mut replay_buffer = ReplayBuffer::load(path);
-        /*
         let train_count = ((replay_buffer.capacity as f64 / opts.TRAINING_BATCH_SIZE as f64).round()
             as usize)
             * opts.TRAINING_ITERATIONS;
         for i in 0..train_count {
             dbg!(i, train_count);
             model.train(&mut replay_buffer, opts.TRAINING_BATCH_SIZE);
-        }*/
+        }
         replay_buffer
     } else {
         ReplayBuffer::new(opts.REPLAY_BUFFER_CAPACITY, num_obs, num_actions)
@@ -210,6 +209,7 @@ pub fn main() {
         let tmp_target_step_avg_100 =
             target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
+
         max_target_avg_100 = max_target_avg_100.max(tmp_target_avg_100);
 
         let record = StatsRow {
