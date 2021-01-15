@@ -25,6 +25,9 @@ pub struct Agent {
     pub collected_targets: Vec<Point<f64>>,
     pub last_state: Vec<f64>,
     pub env_line_strings: Vec<LineString<f64>>,
+    pub near_env_line_strings: Vec<LineString<f64>>,
+    pub near_zone: Rect<f64>,
+    pub recalc: i32,
     pub targets_found: i32,
     pub position_ticker: i32,
     pub position_ticker_start: i32,
@@ -78,6 +81,12 @@ impl Agent {
             ],
             prev_state: vec![],
             env_line_strings: vec![],
+            near_env_line_strings: vec![],
+            near_zone: Rect::new(
+                (f64::NEG_INFINITY, f64::NEG_INFINITY),
+                (f64::INFINITY, f64::INFINITY),
+            ),
+            recalc: 0,
         }
     }
 
@@ -100,6 +109,12 @@ impl Agent {
             (f64::NEG_INFINITY, f64::NEG_INFINITY),
             (f64::INFINITY, f64::INFINITY),
         );
+        self.near_zone = Rect::new(
+            (f64::NEG_INFINITY, f64::NEG_INFINITY),
+            (f64::INFINITY, f64::INFINITY),
+        );
+        self.near_env_line_strings = vec![];
+        self.recalc = 0;
         self.collected_targets = vec![position.clone()];
         self.targets_found = 0;
         self.closest_target = Point::new(0.0, 0.0);
@@ -180,9 +195,20 @@ impl Agent {
     }
 
     pub fn update(&mut self) {
+        if self.recalc <= 0 {
+            let max_dist = (self.speed * 100.0) + self.visibility;
+            self.near_zone = Rect::new((self.position.x() - max_dist, self.position.y() - max_dist), (self.position.x() + max_dist, self.position.y() + max_dist));
+            self.near_env_line_strings = utils::cull_line_strings_precull(
+                &mut self.near_zone,
+                &self.env_line_strings,
+                self.position,
+            ).iter().map(|l|l.to_owned().clone()).collect::<Vec<_>>();
+            self.recalc = 100;
+        }
+        self.recalc -= 1;
         let intersecting_line_strings = utils::cull_line_strings_precull(
             &mut self.rays_bb,
-            &self.env_line_strings,
+            &self.near_env_line_strings,
             self.position,
         );
         utils::find_intersections_par(&mut self.rays, &intersecting_line_strings, self.position)

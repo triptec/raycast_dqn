@@ -33,6 +33,7 @@ use sandbox::env::Env;
 
 use crate::ml::{Model, Model_a2c, Model_ddqn};
 use crate::renderer::Renderer;
+use geo::{Line, Coordinate};
 
 mod input;
 mod ml;
@@ -272,6 +273,16 @@ fn render_env(env: &mut Env, renderer: &mut Renderer) {
     renderer.clear();
     renderer.render_line_strings(
         &env.line_strings.iter().collect(),
+        Color::RGB(192, 192, 192),
+        &env.agents.get(0).unwrap().position,
+    );
+    renderer.render_line_strings(
+        &vec![env.agents.get(0).unwrap().near_zone.to_polygon().exterior()],
+        Color::RGB(0, 0, 255),
+        &env.agents.get(0).unwrap().position,
+    );
+    renderer.render_line_strings(
+        &env.agents.get(0).unwrap().near_env_line_strings.iter().collect(),
         Color::RGB(0, 255, 0),
         &env.agents.get(0).unwrap().position,
     );
@@ -380,7 +391,7 @@ struct Opts {
     #[clap(long, default_value = "0.01")]
     MIN_EPSILON: f64,
     /// Random noise process parameter EPSILON_DECAY
-    #[clap(long, default_value = "0.999")]
+    #[clap(long, default_value = "0.99985")]
     EPSILON_DECAY: f64,
     /// The leadning rate of the Actor
     #[clap(long, default_value = "0.0005")]
