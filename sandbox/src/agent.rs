@@ -101,7 +101,11 @@ impl Agent {
     }
 
     pub(crate) fn reset(&mut self, mut position: Point<f64>) {
-        self.direction = rand::thread_rng().gen_range(-3.14..=3.14);
+        if !self.evaluating {
+            self.direction = rand::thread_rng().gen_range(-3.14..=3.14);
+        } else {
+            self.direction = 0.0;
+        }
         self.position = position.clone();
         self.rays = vec![];
         self.rays_bb = Rect::new(
