@@ -129,6 +129,7 @@ pub fn main() {
     let mut evaluation_runs = 0;
     let mut eval_avg_10 = MovingAverage::new(10);
     let mut log_eval_avg_10 = 0.0;
+    let mut evaluation_ticker = 100;
     'running: loop {
         let input = match renderer.get_input() {
             Input::None => get_input(&stdin_channel),
@@ -160,6 +161,7 @@ pub fn main() {
             evaluation_runs = evaluation_runs + 1;
             env.reset(0, opts.EVALUATION_ENV_FILE.clone(), evaluate);
         } else {
+            evaluation_ticker -= 1;
             env.reset(0, opts.ENV_FILE.clone(), evaluate);
         }
         let mut episode_rewards = 0.0;
@@ -224,8 +226,9 @@ pub fn main() {
         let tmp_target_step_avg_100 =
             target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
-        if !render && !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || rng.gen_range(0..100 as i32) > 98 {
+        if !render && !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || evaluation_ticker < 1 {
             evaluate = true;
+            evaluation_ticker = 100;
         } else {
             evaluate = false; 
         }
