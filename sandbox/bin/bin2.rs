@@ -58,7 +58,7 @@ pub fn main() {
         opts.AGENT_FOOD,
     );
     let mut env = Env::new(
-        opts.ENV_FILE,
+        opts.ENV_FILE.clone(),
         opts.REWARD_WALL_HIT,
         opts.REWARD_WALL_PROXIMITY,
         opts.REWARD_TARGET_FOUND,
@@ -126,6 +126,9 @@ pub fn main() {
     let mut evaluate = false;
     let mut output = true;
     let mut render = false;
+    let mut evaluation_runs = 0;
+    let mut eval_avg_10 = MovingAverage::new(10);
+    let mut log_eval_avg_10 = 0.0;
     'running: loop {
         let input = match renderer.get_input() {
             Input::None => get_input(&stdin_channel),
@@ -153,12 +156,17 @@ pub fn main() {
         }
         let start = Instant::now();
         let mut obs = Tensor::zeros(&[num_obs as _], FLOAT_CPU);
-        env.reset(0, 1.0f64);
+        if evaluate {
+            evaluation_runs = evaluation_runs + 1;
+            env.reset(0, opts.EVALUATION_ENV_FILE.clone(), evaluate);
+        } else {
+            env.reset(0, opts.ENV_FILE.clone(), evaluate);
+        }
         let mut episode_rewards = 0.0;
         let mut episode_steps = 0;
 
         loop {
-            let action = if fill_replay || prefill_replay {
+            let mut action = if fill_replay || prefill_replay {
                 i32::from(rng.gen_range(0..env.action_space() as i32))
             } else if evaluate {
                 i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
@@ -169,6 +177,9 @@ pub fn main() {
                     i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
                 }
             };
+            if evaluate {
+                action = i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
+            }
 
             let (state, reward, done) = env.step(action, 0);
             if render {
@@ -206,10 +217,20 @@ pub fn main() {
             x => x as f64 / episode as f64,
         };
 
+        if evaluate {
+            log_eval_avg_10 = eval_avg_10.feed(episode_targets as f64);
+        }
+
         let tmp_target_step_avg_100 =
             target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
+        if !render && !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || rng.gen_range(0..100 as i32) > 98 {
+            evaluate = true;
+        } else {
+            evaluate = false; 
+        }
         max_target_avg_100 = max_target_avg_100.max(tmp_target_avg_100);
+        
 
         let record = StatsRow {
             episode,
@@ -223,10 +244,14 @@ pub fn main() {
             target_avg_100: tmp_target_avg_100,
             max_target_avg_100: max_target_avg_100,
             epsilon,
+            evaluation_runs: evaluation_runs,
+            evaluation_score: env.agents.get(0).unwrap().evaluation_score,
+            avg_evaluation_score: log_eval_avg_10,
         };
 
         if evaluate {}
         else if prefill_replay {
+            dbg!(replay_buffer.len);
             if replay_buffer.len >= opts.PREFILL_BUFFER.clone().unwrap() as usize {
                 prefill_replay = false;
             }
@@ -347,6 +372,9 @@ struct Opts {
     /// The geometric env file.
     #[clap(short, long, default_value = "data/gavle.json")]
     ENV_FILE: String,
+    /// The geometric env file for evaluation.
+    #[clap(short, long, default_value = "data/evaluation.json")]
+    EVALUATION_ENV_FILE: String,
     /// Statistics output file.
     #[clap(short, long)]
     STATS_FILE: Option<String>,
@@ -472,4 +500,7 @@ struct StatsRow {
     target_avg_100: f64,
     max_target_avg_100: f64,
     epsilon: f64,
+    evaluation_runs: i32,
+    evaluation_score: f64,
+    avg_evaluation_score: f64,
 }

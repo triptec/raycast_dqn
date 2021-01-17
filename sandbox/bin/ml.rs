@@ -479,10 +479,10 @@ impl Model for Model_ddqn {
 
         let value_loss = q.smooth_l1_loss(&q1, Reduction::Mean, 1.0);
 
-        /*
-        let diff = q1.copy() - q.copy();
-        let value_loss = (&diff * &diff).mean(Float);
-         */
+        
+        //let diff = q1.copy() - q.copy();
+        //let value_loss = (&diff * &diff).mean(Float);
+        
         self.actor.optimizer.zero_grad();
         value_loss.backward();
         self.actor.optimizer.step();

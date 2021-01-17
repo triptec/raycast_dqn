@@ -69,15 +69,9 @@ impl Env {
         self.agents.get(0).unwrap().action_space.len()
     }
 
-    pub fn observation_space(&self) -> usize {
-        /*
-        relative_bearing_to_target,
-        steps_to_target,
-        past_position_bearing,
-        steps_to_past_position,
-        rays
-        */
-        4 + self.agents.get(0).unwrap().ray_count as usize
+    pub fn observation_space(&mut self) -> usize {
+        let (state, _) = self.get_state(0);
+        state.len() + self.agents.get(0).unwrap().ray_count as usize
     }
 
     pub fn step(&mut self, action: i32, a: i32) -> (Vec<f64>, f64, bool) {
@@ -117,14 +111,17 @@ impl Env {
         self.agents[a as usize].age += 1.0;
         self.agents[a as usize].food -= 1.0;
         self.agents[a as usize].step(action as usize);
-        let (mut state, closest_target) = self.get_state(a, step_ray);
+        let (mut state, closest_target) = self.get_state(a);
         self.agents[a as usize].closest_target = closest_target;
         // Target
-        reward = reward - state[0].abs() / 3.0; // self.reward_target_bearing_mult;
-        reward = reward - state[1] / 3.0; //* self.reward_target_steps_mult; // steps_to_target / 3
+        reward = reward - state[0].abs() / 2.0; // self.reward_target_bearing_mult;
+        reward = reward - state[1] / 2.0; //* self.reward_target_steps_mult; // steps_to_target / 3
                                           // Past position
                                           //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
                                           //reward = reward - (1.0-state[3]) / 20.0; //
+        //reward = reward - (1.0-state[2].abs()) * (state[0].abs() / 10.0);
+        //reward = reward - 1.0_f64.min(1.0-state[3]) * (state[1].min(1.0) / 10.0);
+
         if state[1] * 1000.0 < 10.0 {
             state = self.agents[a as usize].last_state.iter().copied().collect();
             reward = self.reward_target_found;
@@ -137,7 +134,7 @@ impl Env {
         return (state, reward, !self.agents[a as usize].active);
     }
 
-    pub fn get_state(&mut self, a: i32, mut step_ray: Ray) -> (Vec<f64>, Point<f64>) {
+    pub fn get_state(&mut self, a: i32) -> (Vec<f64>, Point<f64>) {
         let step_ray = Ray::new(
             0.0,
             self.agents[a as usize].speed,
@@ -164,9 +161,9 @@ impl Env {
             .euclidean_distance(&closest_target);
         let steps_to_target = (distance_to_target / self.agents[a as usize].speed) / 1000.0;
         state.push(steps_to_target);
-        state.push(self.agents[a as usize].past_position_bearing / 3.14159);
-        let steps_to_past_position = (self.agents[a as usize].past_position_distance / self.agents[a as usize].speed) / 1000.0;
-        state.push(steps_to_past_position);
+        //state.push(self.agents[a as usize].past_position_bearing / 3.14159);
+        //let steps_to_past_position = (self.agents[a as usize].past_position_distance / self.agents[a as usize].speed) / 1000.0;
+        //state.push(steps_to_past_position);
         let mut ray_lengths = self.agents[a as usize]
             .rays
             .iter()
@@ -176,28 +173,19 @@ impl Env {
         return (state, closest_target);
     }
 
-    pub fn reset(&mut self, agent_index: i32, epsilon: f64) {
-        let mut new_targets = vec![];
-        let mut take_targets = self.original_targets.len() as f64;
-        if self.original_targets.len() as f64 * (epsilon + epsilon) + 10.0
-            < self.original_targets.len() as f64
-        {
-            take_targets = self.original_targets.len() as f64 * (epsilon + epsilon) + 10.0;
+    pub fn reset(&mut self, agent_index: i32, path: String, evaluate: bool) {
+        let (line_strings, targets, _, _, _, _) = utils::import_geometry(path);
+        self.line_strings = line_strings;
+        self.targets = targets;
+        let mut start = self.targets[0 as usize].clone();
+        if !evaluate {
+            self.targets.shuffle(&mut rand::thread_rng());
+            start = self
+                .targets
+                .choose(&mut rand::thread_rng())
+                .unwrap()
+                .clone();
         }
-        self.original_targets
-            .iter()
-            .choose_multiple(&mut rand::thread_rng(), take_targets as usize)
-            .iter()
-            .for_each(|p| {
-                new_targets.push(p.clone().clone());
-            });
-        self.targets = new_targets.clone();
-        self.targets.shuffle(&mut rand::thread_rng());
-        let start = self
-            .targets
-            .choose(&mut rand::thread_rng())
-            .unwrap()
-            .clone();
         self.possible_targets = self
             .targets
             .iter()
@@ -205,6 +193,8 @@ impl Env {
             .copied()
             .collect();
         //self.agents[agent_index as usize] = Agent::new(start, self.line_strings.clone(), self.max_steps + ((1.0 - epsilon) * 1000.0) as i32);
+        self.agents[agent_index as usize].evaluating = evaluate;
+        self.agents[agent_index as usize].env_line_strings = self.line_strings.clone();
         self.agents[agent_index as usize].reset(start);
         self.agents[agent_index as usize].cast_rays();
     }

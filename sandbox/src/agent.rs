@@ -32,6 +32,8 @@ pub struct Agent {
     pub past_position: Point<f64>,
     pub past_position_distance: f64,
     pub past_position_bearing: f64,
+    pub evaluating: bool,
+    pub evaluation_score: f64,
 }
 
 impl Agent {
@@ -68,11 +70,11 @@ impl Agent {
             past_position_bearing: 0.0,
             last_state: vec![],
             action_space: vec![
-                -10.0f64.to_radians(),
+                -20.0f64.to_radians(),
                 -3.0f64.to_radians(),
                 0.0f64.to_radians(),
                 3.0f64.to_radians(),
-                10.0f64.to_radians(),
+                20.0f64.to_radians(),
             ],
             prev_state: vec![],
             env_line_strings: vec![],
@@ -82,6 +84,8 @@ impl Agent {
                 (f64::INFINITY, f64::INFINITY),
             ),
             recalc: 0,
+            evaluating: false,
+            evaluation_score: 0.0,
         }
     }
 
@@ -138,11 +142,18 @@ impl Agent {
 
     pub fn collect_target(&mut self, target: Point<f64>, n_targets: i32) {
         self.food += 100.0;
+        if self.evaluating {
+            self.food = 2500.0;
+            if self.evaluation_score < self.targets_found as f64 {
+                self.evaluation_score = self.targets_found as f64;
+            }
+        }
         self.targets_found = self.targets_found + 1;
         self.collected_targets.push(target);
         if self.collected_targets.len() as i32 == n_targets {
             self.collected_targets = vec![];
         }
+        self.past_position = self.position;
     }
 
     pub fn step(&mut self, action: usize) {
@@ -152,10 +163,9 @@ impl Agent {
         if self.food <= 0.0 {
             self.active = false;
         }
-        if self.age > self.max_age {
+        if self.age > self.max_age && !self.evaluating {
             self.active = false;
         }
-
         if direction_change == &300.0f64 {
             self.past_position = self.position;
         } else {
