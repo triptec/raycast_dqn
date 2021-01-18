@@ -121,6 +121,8 @@ pub fn main() {
     let mut target_step_avg_100 = MovingAverage::new(100);
     let mut target_avg_100 = MovingAverage::new(100);
     let mut steps_sec_avg_100 = MovingAverage::new(100);
+    let mut tmp_target_step_avg_100: f64 = 0.0;
+    let mut tmp_target_avg_100: f64 = 0.0;
     let mut max_target_avg_100: f64 = 0.0;
     let mut evaluate = false;
     let mut output = true;
@@ -167,6 +169,7 @@ pub fn main() {
         let mut episode_steps = 0;
 
         loop {
+            /*
             let mut action = if fill_replay || prefill_replay {
                 i32::from(rng.gen_range(0..env.action_space() as i32))
             } else if evaluate {
@@ -181,6 +184,45 @@ pub fn main() {
             if evaluate {
                 action = i32::from(tch::no_grad(|| model.forward(&obs)).argmax(-1, false))
             }
+             */
+
+            /*
+            let actions_tensor = if evaluate {
+                tch::no_grad(|| model.forward(&obs))
+            } else {
+                if rng.gen_range(0.0, 1.0) < epsilon {
+                    //let actions: Vec<f64> = (0..num_actions).map(|_| {rng.gen_range(-1.0, 1.0)}).collect();
+                    //Tensor::of_slice(&actions).totype(Float)
+
+                    /*
+                    let action = rng.gen_range(0, 5);
+                    let mut zero_vec = vec![0.0; num_actions];
+                    zero_vec[action] = 2.0;
+                    let state = Tensor::of_slice(&zero_vec).totype(Float);
+                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+                    (predicted_actions + state).clamp(-1.0, 1.0)
+                     */
+                    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+                    let action = rng.gen_range(0, 5);
+                    let max_predicted_reward = predicted_actions.max();
+                    let mut t = predicted_actions.get(action);
+                    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
+                    t.copy_(&t2.squeeze());
+                    predicted_actions
+                } else {
+                    tch::no_grad(|| model.forward(&obs))
+                }
+            };
+            let action = i32::from(&actions_tensor.argmax(-1, false));
+            */
+
+            let mut actions_tensor = if evaluate || rng.gen_range(0.0..=1.0) > epsilon {
+                tch::no_grad(|| model.forward(&obs))
+            } else {
+                get_random_actions(&mut rng, &mut env, &mut model, &mut obs)
+            };
+
+            let action = i32::from(&actions_tensor.argmax(-1, false));
 
             let (state, reward, done) = env.step(action, 0);
             if render {
@@ -189,7 +231,7 @@ pub fn main() {
 
             let state_t = Tensor::of_slice(&state).totype(Float);
             if !evaluate {
-                replay_buffer.push(&obs, &action.into(), &reward.into(), &state_t);
+                replay_buffer.push(&obs, &actions_tensor, &reward.into(), &state_t);
             }
             if done {
                 break;
@@ -220,10 +262,10 @@ pub fn main() {
 
         if evaluate {
             log_eval_avg_10 = eval_avg_10.feed(episode_targets as f64);
+        } else {
+            tmp_target_step_avg_100 = target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
+            tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
         }
-        let tmp_target_step_avg_100 =
-            target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
-        let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
 
         if !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || evaluation_ticker < 1 {
             evaluate = true;
@@ -290,6 +332,16 @@ pub fn main() {
         wtr.serialize(record).unwrap();
         wtr.flush().unwrap();
     }
+}
+
+fn get_random_actions(rng: &mut StdRng, mut env: &mut Env, mut model: &mut Box<dyn Model>, obs: &mut Tensor) -> Tensor {
+    let predicted_actions = tch::no_grad(|| model.forward(&obs));
+    let action = rng.gen_range(0..env.action_space() as i64);
+    let max_predicted_reward = predicted_actions.max();
+    let mut t = predicted_actions.get(action);
+    let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
+    t.copy_(&t2.squeeze());
+    predicted_actions
 }
 
 fn render_env(env: &mut Env, renderer: &mut Renderer) {
