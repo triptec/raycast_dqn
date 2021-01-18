@@ -9,10 +9,6 @@ default-run = "bin2"
 name = "sandbox"
 
 [[bin]]
-name = "a2c"
-path = "bin/a2c.rs"
-
-[[bin]]
 name = "bin"
 path = "bin/bin.rs"
 

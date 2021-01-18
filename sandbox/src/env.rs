@@ -24,6 +24,7 @@ pub struct Env {
     pub reward_target_bearing_mult: f64,
     pub reward_target_steps_mult: f64,
     pub wall_proximity: f64,
+    pub loaded_env: String,
 }
 
 impl Env {
@@ -36,6 +37,7 @@ impl Env {
         reward_target_steps_mult: f64,
         wall_proximity: f64,
     ) -> Self {
+        let loaded_env = path.clone();
         let (line_strings, targets, scalex, scaley, xmin, ymin) = utils::import_geometry(path);
         Env {
             original_targets: targets.iter().copied().collect(),
@@ -51,6 +53,7 @@ impl Env {
             reward_target_bearing_mult,
             reward_target_steps_mult,
             wall_proximity,
+            loaded_env,
         }
     }
 
@@ -174,9 +177,12 @@ impl Env {
     }
 
     pub fn reset(&mut self, agent_index: i32, path: String, evaluate: bool) {
-        let (line_strings, targets, _, _, _, _) = utils::import_geometry(path);
-        self.line_strings = line_strings;
-        self.targets = targets;
+        if self.loaded_env != path {
+            self.loaded_env = path.clone();
+            let (line_strings, targets, _, _, _, _) = utils::import_geometry(path);
+            self.line_strings = line_strings;
+            self.targets = targets;
+        }
         let mut start = self.targets[0 as usize].clone();
         if !evaluate {
             self.targets.shuffle(&mut rand::thread_rng());

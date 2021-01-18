@@ -17,7 +17,7 @@ pub struct ReplayBuffer {
     #[serde(with = "tch_serde::serde_tensor")]
     rewards: Tensor,
     #[serde(with = "tch_serde::serde_tensor")]
-    action: Tensor,
+    actions: Tensor,
     pub capacity: usize,
     pub len: usize,
     i: usize,
@@ -29,18 +29,18 @@ impl ReplayBuffer {
             obs: Tensor::zeros(&[capacity as _, num_obs as _], FLOAT_CPU),
             next_obs: Tensor::zeros(&[capacity as _, num_obs as _], FLOAT_CPU),
             rewards: Tensor::zeros(&[capacity as _, 1], FLOAT_CPU),
-            action: Tensor::zeros(&[capacity as _, 1], INT64_CPU),
+            actions: Tensor::zeros(&[capacity as _, num_actions as _], FLOAT_CPU),
             capacity,
             len: 0,
             i: 0,
         }
     }
 
-    pub fn push(&mut self, obs: &Tensor, action: &Tensor, reward: &Tensor, next_obs: &Tensor) {
+    pub fn push(&mut self, obs: &Tensor, actions: &Tensor, reward: &Tensor, next_obs: &Tensor) {
         let i = self.i % self.capacity;
         self.obs.get(i as _).copy_(obs);
         self.rewards.get(i as _).copy_(reward);
-        self.action.get(i as _).copy_(action);
+        self.actions.get(i as _).copy_(actions);
         self.next_obs.get(i as _).copy_(next_obs);
         self.i += 1;
         if self.len < self.capacity {
@@ -58,10 +58,10 @@ impl ReplayBuffer {
 
         let states = self.obs.index_select(0, &batch_indexes);
         let next_states = self.next_obs.index_select(0, &batch_indexes);
-        let action = self.action.index_select(0, &batch_indexes);
+        let actions = self.actions.index_select(0, &batch_indexes);
         let rewards = self.rewards.index_select(0, &batch_indexes);
 
-        Some((states, action, rewards, next_states))
+        Some((states, actions, rewards, next_states))
     }
 
     pub fn save(&self, path: String) {
@@ -355,19 +355,20 @@ impl Model for Model_a2c {
     }
 
     fn train(&mut self, replay_buffer: &mut ReplayBuffer, batch_size: usize) {
-        let (states, action, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
+        let (states, actions, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
             Some(v) => v,
             _ => return, // We don't have enough samples for training yet.
         };
 
-        let actions = tch::no_grad(|| self.actor_target.forward(&states));
+        /*
+        let actions = tch::no_grad(|| self.actor.forward(&states));
         for i in 0..batch_size as i64 {
             let mut predicted_rewards = actions.get(i);
             let max_predicted_reward = actions.get(i).max();
             let mut action_tensor = predicted_rewards.get(i64::from(action.get(i)));
             let t2 = Tensor::of_slice(&[f64::from(&max_predicted_reward) + 0.0001]);
             action_tensor.copy_(&t2.squeeze());
-        }
+        }*/
 
         let mut q_target = self
             .critic_target
@@ -389,7 +390,7 @@ impl Model for Model_a2c {
                 let index = i64::from(max_diff_indexes.get(i as i64));
                 replay_buffer.push(
                     &states.get(index).copy(),
-                    &action.get(index).copy(),
+                    &actions.get(index).copy(),
                     &rewards.get(index).copy(),
                     &next_states.get(index).copy(),
                 )
@@ -433,7 +434,7 @@ impl Model for Model_ddqn {
     }
 
     fn train(&mut self, replay_buffer: &mut ReplayBuffer, batch_size: usize) {
-        let (states, action, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
+        let (states, actions, rewards, next_states) = match replay_buffer.random_batch(batch_size) {
             Some(v) => v,
             _ => return, // We don't have enough samples for training yet.
         };
@@ -441,14 +442,14 @@ impl Model for Model_ddqn {
         let mut q_target = rewards.copy() + (self.gamma * &future_predicted_reward).detach();
         let q = self.actor.forward(&states);
 
-        //let actions_taken = actions.argmax(-1, false);
+        let actions_taken = actions.argmax(-1, false);
 
-        let actions_taken = action.copy();
+        //let actions_taken = action.copy();
 
         if self.prioritized_memory {
             /* Remember worst predictions */
-            //let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
-            let actions_taken1 = &action;
+            let actions_taken1 = actions.argmax(1, false).unsqueeze(-1);
+            //let actions_taken1 = &action;
             let predicted_action_rewards = q.gather(-1, &actions_taken1, false);
             let action_rewards = q_target.gather(-1, &actions_taken1, false);
             let action_diff = action_rewards.copy() - predicted_action_rewards.copy();
@@ -458,7 +459,7 @@ impl Model for Model_ddqn {
                 let index = i64::from(max_diff_indexes.get(i as i64));
                 replay_buffer.push(
                     &states.get(index).copy(),
-                    &action.get(index).copy(),
+                    &actions.get(index).copy(),
                     &rewards.get(index).copy(),
                     &next_states.get(index).copy(),
                 )

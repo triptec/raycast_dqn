@@ -225,7 +225,7 @@ pub fn main() {
             target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
         let tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
 
-        if !render && !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || evaluation_ticker < 1 {
+        if !prefill_replay && tmp_target_avg_100 > max_target_avg_100 || evaluation_ticker < 1 {
             evaluate = true;
             evaluation_ticker = 100;
         } else {
@@ -389,7 +389,7 @@ struct Opts {
     #[clap(long, default_value = "0.997")]
     GAMMA: f64,
     /// The weight for updating the target networks.
-    #[clap(long, default_value = "0.0005")]
+    #[clap(long, default_value = "0.005")]
     TAU: f64,
     /// The capacity of the replay buffer used for sampling training data.
     #[clap(long, default_value = "1000000")]
