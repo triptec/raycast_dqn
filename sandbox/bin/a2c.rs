@@ -446,7 +446,6 @@ pub fn main() {
         opts.AGENT_VISIBILITY,
         opts.AGENT_MAX_AGE,
         opts.AGENT_FOOD,
-        opts.AGENT_POSITION_TICKER,
     );
     let mut env = Env::new(
         opts.ENV_FILE,
