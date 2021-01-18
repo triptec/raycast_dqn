@@ -117,8 +117,8 @@ impl Env {
         let (mut state, closest_target) = self.get_state(a);
         self.agents[a as usize].closest_target = closest_target;
         // Target
-        reward = reward - state[0].abs() / 2.0; // self.reward_target_bearing_mult;
-        reward = reward - state[1] / 2.0; //* self.reward_target_steps_mult; // steps_to_target / 3
+        reward = reward - state[0].abs() * self.reward_target_bearing_mult;
+        reward = reward - state[1] * self.reward_target_steps_mult; // steps_to_target / 3
                                           // Past position
                                           //reward = reward - (1.0-state[2].abs()) / 20.0; // relative bearing to past position / 20
                                           //reward = reward - (1.0-state[3]) / 20.0; //
