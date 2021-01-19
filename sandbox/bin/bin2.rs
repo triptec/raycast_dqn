@@ -130,6 +130,7 @@ pub fn main() {
     let mut evaluation_runs = 0;
     let mut eval_avg_10 = MovingAverage::new(10);
     let mut log_eval_avg_10 = 0.0;
+    let mut max_log_eval_avg_10: f64 = 0.0;
     let mut evaluation_ticker = 100;
     'running: loop {
         let input = match renderer.get_input() {
@@ -262,6 +263,7 @@ pub fn main() {
 
         if evaluate {
             log_eval_avg_10 = eval_avg_10.feed(episode_targets as f64);
+            max_log_eval_avg_10 = max_log_eval_avg_10.max(log_eval_avg_10);
         } else {
             tmp_target_step_avg_100 = target_step_avg_100.feed(episode_targets as f64 / episode_steps as f64);
             tmp_target_avg_100 = target_avg_100.feed(episode_targets as f64);
@@ -290,6 +292,7 @@ pub fn main() {
             evaluation_runs: evaluation_runs,
             evaluation_score: env.agents.get(0).unwrap().evaluation_score,
             avg_evaluation_score: log_eval_avg_10,
+            max_avg_evaluation_score: max_log_eval_avg_10,
         };
 
         if evaluate {}
@@ -556,4 +559,5 @@ struct StatsRow {
     evaluation_runs: i32,
     evaluation_score: f64,
     avg_evaluation_score: f64,
+    max_avg_evaluation_score: f64,
 }
