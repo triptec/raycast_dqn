@@ -70,11 +70,11 @@ impl Agent {
             past_position_bearing: 0.0,
             last_state: vec![],
             action_space: vec![
-                -10.0f64.to_radians(),
+                -15.0f64.to_radians(),
                 -3.0f64.to_radians(),
                 0.0f64.to_radians(),
                 3.0f64.to_radians(),
-                10.0f64.to_radians(),
+                15.0f64.to_radians(),
             ],
             prev_state: vec![],
             env_line_strings: vec![],
